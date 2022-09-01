@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ Parser, Subcommand };
 
 /// A fictional versioning CLI
 #[derive(Debug, Parser)] // requires `derive` feature
@@ -24,8 +24,9 @@ pub(crate) enum Commands {
     },
     Get {
         #[clap(value_parser)]
-        pattern: String,
+        pattern: Option<String>,
     },
+    Clear {},
     // Stash(Stash),
     // #[clap(external_subcommand)] External(Vec<OsString>),
 }

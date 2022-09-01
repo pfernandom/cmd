@@ -1,8 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::fmt::Formatter;
-    use std::fmt::Arguments;
-
     // #[macro_export]
     // macro_rules! format_vec {
     //     (

@@ -13,9 +13,7 @@ pub(crate) fn parse_program(program: &str) -> Command {
 
     let mut output = Command::new(cmd);
     for arg in iter {
-        print!("Arg:({})", arg);
         output.arg(arg);
     }
-    print!("Program: {:?}", output.get_program());
     return output;
 }
