@@ -7,7 +7,10 @@ pub fn add_command(pattern: bool, execute: bool, mem: &ConfigMem) {
     let note = get_input(Some("Write your command"));
     print!("{}", note);
 
-    if !pattern || execute {
+    if pattern {
+    }
+
+    if execute {
         let mut program = parse_program(&note);
 
         let cmd_result = program.spawn().map(|mut p| { p.wait().or_else(|_| Err(false)) });
