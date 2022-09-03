@@ -1,10 +1,9 @@
-use crate::cmd_utils::{ get_input };
-use crate::cmd_config_mem::ConfigMem;
-use crate::{ log_error, log_info, log_debug };
+use crate::{ log_error, log_info, log_debug, Deps };
 use crate::program::parse_program;
 
-pub fn add_command(pattern: bool, execute: bool, mem: &ConfigMem) {
-    let note = get_input(Some("Write your command"));
+pub fn add_command(pattern: bool, execute: bool, deps: &Deps) {
+    let mem = &deps.mem;
+    let note = deps.input.get_input(Some("Write your command".into()));
     print!("{}", note);
 
     if !pattern || execute {
@@ -14,7 +13,7 @@ pub fn add_command(pattern: bool, execute: bool, mem: &ConfigMem) {
 
         match cmd_result {
             Ok(_) => {
-                if let Err(err) = mem.add_command(note) {
+                if let Err(err) = mem.new_command(note) {
                     log_debug!("Cannot add command: {:?}", err);
                     return ();
                 }
@@ -27,7 +26,7 @@ pub fn add_command(pattern: bool, execute: bool, mem: &ConfigMem) {
         }
     } else {
         if
-            let Err(err) = mem.add_command(note).map(|_| {
+            let Err(err) = mem.new_command(note).map(|_| {
                 log_info!("SUCCESS: Command added");
             })
         {

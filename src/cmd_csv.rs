@@ -1,10 +1,11 @@
-use std::fs::OpenOptions;
+use std::{ io::Read };
+use csv::Reader;
 use serde::{ Serialize, Deserialize };
-use crate::log_debug;
+use std::hash::Hash;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
-#[derive(Hash, Eq, Clone)]
+#[derive(Eq, Clone)]
 pub struct CmdRecord {
     #[serde(rename = "id")]
     pub id: usize,
@@ -12,6 +13,14 @@ pub struct CmdRecord {
     pub command: String,
     #[serde(rename = "used_times")]
     pub used_times: usize,
+}
+
+impl Hash for CmdRecord {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.command.hash(state);
+        self.used_times.hash(state);
+    }
 }
 
 impl PartialEq for CmdRecord {
@@ -30,14 +39,7 @@ impl CmdRecord {
     }
 }
 
-pub fn read_cmd_file(commands_path: &str) -> Vec<CmdRecord> {
-    log_debug!("Reading {}", commands_path);
-    let file = OpenOptions::new().read(true).open(commands_path).expect("Could not open file");
-
-    // let reader = BufReader::new(file);
-
-    let mut rdr = csv::ReaderBuilder::new().has_headers(false).from_reader(file);
-
+pub fn read_cmd_file<T: Read>(rdr: &mut Reader<T>) -> Vec<CmdRecord> {
     let options = rdr
         .deserialize()
         .enumerate()

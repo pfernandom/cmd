@@ -1,16 +1,15 @@
 use regex::Regex;
-use dialoguer::{ theme::ColorfulTheme, Select };
 use std::collections::HashSet;
-use std::default::Default;
 use crate::{ * };
-use crate::program::parse_program;
-use crate::cmd_utils::get_input;
+use crate::program::parse_programs;
+use std::process::{ Command };
 
-pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
+pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
+    let mem: &ConfigMem = &deps.mem;
     let parsed = match pattern {
-        Some(p) => p,
+        Some(p) => p.clone(),
         None => {
-            let cmd = get_input(Some("Search for a command"));
+            let cmd = deps.input.get_input(Some("Search for a command".to_string()));
             cmd
         }
     };
@@ -18,14 +17,15 @@ pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
     log_debug!("{}", parsed);
     let re = Regex::new(&parsed).expect("could not parse regex");
 
-    let mut commands = mem.get_commands();
+    let mut commands = mem.get_commands().clone();
 
     let set: HashSet<_> = commands
         .clone()
         .drain(..)
         .collect::<HashSet<_>>(); // dedup
 
-    let used_commands = mem.used_commands
+    let used_commands = mem
+        .get_used_commands()
         .clone()
         .iter()
         .filter(|x| !set.contains(x))
@@ -49,12 +49,7 @@ pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
         return true;
     }
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick a command")
-        .items(&options[..])
-        .default(0)
-        .interact_opt()
-        .expect("did not get params");
+    let selection = deps.input.select_option(&options);
 
     let selected_cmd_index = match selection {
         Some(ind) => { ind }
@@ -67,7 +62,8 @@ pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
     let selected_cmd = options.get(selected_cmd_index).unwrap();
     let mut parsed_cmd = String::from(selected_cmd);
 
-    let seleted_record = mem.used_commands
+    let seleted_record = mem
+        .get_used_commands()
         .get(selected_cmd_index)
         .unwrap_or_else(|| commands.get(selected_cmd_index).unwrap());
 
@@ -81,7 +77,7 @@ pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
             println!("Fill {} params...", count);
 
             for i in 0..count {
-                let note = get_input(Some(&format!("Set param No.{}:", i + 1)));
+                let note = deps.input.get_input(Some(format!("Set param No.{}:", i + 1)));
                 parsed_cmd = parsed_cmd.replacen("{}", &note, 1);
                 // print!("{esc}c", esc = 27 as char);
                 // print!("\r");
@@ -95,8 +91,16 @@ pub fn get_command(pattern: Option<String>, mem: &ConfigMem) -> bool {
 
     log_debug!("Executing '{}'!", &final_cmd);
 
-    let mut program = parse_program(&final_cmd);
-    match program.spawn().expect("failed to execute process").wait() {
+    let mut programs = parse_programs(&final_cmd);
+
+    let result: Result<Vec<_>, _> = programs
+        .iter_mut()
+        .map(|p: &mut Command| p.spawn())
+        .map(|p| p.expect("Could not start process").wait())
+        .map(|x| x)
+        .collect();
+
+    match result {
         Ok(_) => {
             log_info!("Finalized successfully");
             let mut new_cmd = seleted_record.clone();

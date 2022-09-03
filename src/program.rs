@@ -1,5 +1,7 @@
 use std::process::Command;
 
+use crate::log_debug;
+
 pub(crate) fn parse_program(program: &str) -> Command {
     let n = program.replace("\n", "");
     let parts = n.split(" ");
@@ -15,5 +17,14 @@ pub(crate) fn parse_program(program: &str) -> Command {
     for arg in iter {
         output.arg(arg);
     }
+    log_debug!("Program: {:?}", output);
     return output;
+}
+
+pub fn parse_programs(program: &str) -> Vec<Command> {
+    program
+        .split("&&")
+        .map(|cmd| cmd.trim())
+        .map(|cmd| parse_program(cmd))
+        .collect::<Vec<_>>()
 }

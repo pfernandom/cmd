@@ -4,7 +4,7 @@ use clap::{ Parser, Subcommand };
 #[derive(Debug, Parser)] // requires `derive` feature
 #[clap(name = "cmd")]
 #[clap(about = "A command line manager", long_about = None)]
-pub(crate) struct Cli {
+pub struct Cli {
     #[clap(subcommand)]
     pub command: Commands,
 
@@ -13,7 +13,7 @@ pub(crate) struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     Add {
         // /// Stuff to add
         #[clap(name = "pattern", long, short, parse(from_flag))]
