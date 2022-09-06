@@ -2,7 +2,7 @@ use std::{ io::{ Error, Read, Write } };
 
 use csv::{ Reader, Writer };
 
-pub trait FileManager {
+pub trait FileManager: std::fmt::Debug {
     type W: Write;
     type R: Read;
 

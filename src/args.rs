@@ -1,7 +1,7 @@
 use clap::{ Parser, Subcommand };
 
 /// A fictional versioning CLI
-#[derive(Debug, Parser)] // requires `derive` feature
+#[derive(Debug, Parser, Clone)] // requires `derive` feature
 #[clap(name = "cmd")]
 #[clap(about = "A command line manager", long_about = None)]
 pub struct Cli {
@@ -12,7 +12,7 @@ pub struct Cli {
     pub verbose: bool,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum Commands {
     Add {
         // /// Stuff to add

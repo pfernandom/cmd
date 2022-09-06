@@ -1,11 +1,9 @@
 use regex::Regex;
 use std::collections::HashSet;
-use crate::{ * };
-use crate::program::parse_programs;
-use std::process::{ Command };
+use crate::{ *, error::CmdError };
 
-pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
-    let mem: &ConfigMem = &deps.mem;
+pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdError> {
+    let mem: &mut ConfigMem = &mut deps.mem;
     let parsed = match pattern {
         Some(p) => p.clone(),
         None => {
@@ -18,17 +16,19 @@ pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
     let re = Regex::new(&parsed).expect("could not parse regex");
 
     let mut commands = mem.get_commands().clone();
+    println!("All commands: {:?}", commands);
 
     let set: HashSet<_> = commands
         .clone()
         .drain(..)
+        .map(|e| e.command)
         .collect::<HashSet<_>>(); // dedup
 
     let used_commands = mem
         .get_used_commands()
         .clone()
         .iter()
-        .filter(|x| !set.contains(x))
+        .filter(|x| !set.contains(&x.command))
         .map(|x| x.clone())
         .take(5)
         .collect::<Vec<_>>();
@@ -46,7 +46,7 @@ pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
 
     if options.is_empty() {
         log::warn!("No command matched the pattern");
-        return true;
+        return Ok(());
     }
 
     let selection = deps.input.select_option(&options);
@@ -91,14 +91,7 @@ pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
 
     log_debug!("Executing '{}'!", &final_cmd);
 
-    let mut programs = parse_programs(&final_cmd);
-
-    let result: Result<Vec<_>, _> = programs
-        .iter_mut()
-        .map(|p: &mut Command| p.spawn())
-        .map(|p| p.expect("Could not start process").wait())
-        .map(|x| x)
-        .collect();
+    let result = deps.os.execute_command(&final_cmd);
 
     match result {
         Ok(_) => {
@@ -107,19 +100,13 @@ pub fn get_command(pattern: &Option<String>, deps: &Deps) -> bool {
             new_cmd.update_command(&final_cmd);
             new_cmd.used_times = final_count;
             match mem.add_used_command(new_cmd) {
-                Ok(_) => true,
-                Err(_) => false,
+                Ok(_) => Ok(()),
+                Err(err) => Err(err.into()),
             }
         }
         Err(err) => {
             log_info!("Finalized with an error: {:?}", err);
-            false
+            Err(err.into())
         }
     }
-
-    // log_debug!("status:\n{}", result.status);
-    // println!("stdout:\n{}", String::from_utf8_lossy(&result.stdout));
-    // println!("stderr:\n{}", String::from_utf8_lossy(&result.stderr));
-
-    // assert!(result.status.success());
 }

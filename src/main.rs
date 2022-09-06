@@ -3,7 +3,13 @@ use env_logger::Builder;
 use log::LevelFilter;
 
 use clap::Parser;
-use traits::{ file_manager::FileManager, inputable::Inputable };
+use services::{
+    cmd_service::build_cmd_service,
+    controller::ConfigMem,
+    file_manager::{ build_file_manager, FileManagerImpl },
+    os_service::OSServiceImpl,
+};
+use traits::{ file_manager::FileManager, inputable::Inputable, os_service::OSService };
 
 use crate::input::InputManager;
 
@@ -12,20 +18,19 @@ mod input;
 mod logging;
 mod program;
 mod cmd;
+mod services;
 mod tests;
 mod cmd_utils;
 mod cmd_csv;
-mod cmd_config_mem;
-
 mod traits;
-
+mod error;
 use args::{ Cli, Commands };
-use cmd_config_mem::{ ConfigMem, build_file_manager, build_cmd_service, FileManagerImpl };
 
 pub struct Deps {
     pub input: Box<dyn Inputable>,
     pub args: Cli,
     pub mem: ConfigMem,
+    pub os: Box<dyn OSService>,
 }
 
 fn create_config() -> Result<ConfigMem, String> {
@@ -36,7 +41,7 @@ fn create_config() -> Result<ConfigMem, String> {
     let all_cmd_service = build_cmd_service(all_file_mgr)?;
     let used_cmd_service = build_cmd_service(used_file_mgr)?;
 
-    Ok(ConfigMem { all: all_cmd_service, used: used_cmd_service })
+    Ok(ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
 }
 fn main() {
     let args = Cli::parse();
@@ -52,8 +57,9 @@ fn main() {
     match maybe_mem {
         Ok(mem) => {
             let input: InputManager = InputManager {};
+            let os_service = OSServiceImpl {};
 
-            app(&(Deps { args, mem, input: Box::new(input) }))
+            app(&mut (Deps { args, mem, input: Box::new(input), os: Box::new(os_service) }))
         }
         Err(err) => {
             log_error!("Error: Could not start the app: {}", err);
@@ -61,13 +67,24 @@ fn main() {
     }
 }
 
-pub(crate) fn app(deps: &Deps) {
-    match &deps.args.command {
+pub(crate) fn app(deps: &mut Deps) {
+    let command = &mut deps.args.clone().command;
+    match command {
         Commands::Get { pattern } => {
-            cmd_get::get_command(pattern, &deps);
+            match cmd_get::get_command(&pattern, deps) {
+                Ok(_) => { log_info!("Completed successfully.") }
+                Err(err) => {
+                    log_error!("Error: {}", err.to_string());
+                }
+            }
         }
         Commands::Add { pattern, execute } => {
-            cmd_add::add_command(*pattern, *execute, &deps);
+            match cmd_add::add_command(*pattern, *execute, &deps) {
+                Ok(_) => { log_info!("Completed successfully.") }
+                Err(err) => {
+                    log_error!("Error: {}", err.to_string());
+                }
+            }
         }
         Commands::Clear {} => {
             cmd_clear::clear(&deps);

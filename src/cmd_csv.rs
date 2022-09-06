@@ -3,9 +3,8 @@ use csv::Reader;
 use serde::{ Serialize, Deserialize };
 use std::hash::Hash;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Eq, Clone)]
 #[serde(rename_all = "PascalCase")]
-#[derive(Eq, Clone)]
 pub struct CmdRecord {
     #[serde(rename = "id")]
     pub id: usize,
