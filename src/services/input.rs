@@ -16,9 +16,16 @@ impl Inputable for InputManager {
         note
     }
 
-    fn select_option(self: &Self, options: &Vec<String>) -> Option<usize> {
+    fn select_option(
+        self: &Self,
+        options: &Vec<String>,
+        maybe_prompt: Option<String>
+    ) -> Option<usize> {
         Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Pick a command")
+            .with_prompt(match maybe_prompt {
+                Some(text) => text,
+                None => "Pick a command".to_string(),
+            })
             .items(&options[..])
             .default(0)
             .interact_opt()

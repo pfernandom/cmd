@@ -8,8 +8,6 @@ use csv::Reader;
 use csv::Writer;
 use mockall::automock;
 use crate::log_debug;
-use crate::log_info;
-use crate::log_warn;
 use crate::traits::file_manager::{ FileManager };
 
 #[derive(Debug)]
@@ -21,7 +19,7 @@ pub struct FileManagerImpl {
 
 pub fn build_file_manager(name: &str) -> FileManagerImpl {
     let mut home = home::home_dir().expect("Could not find home dir");
-    log_warn!("Saving settings to: {}/.cmd", home.to_str().expect("could not parse home path"));
+    log_debug!("Saving settings to: {}/.cmd", home.to_str().expect("could not parse home path"));
 
     home.push(".cmd");
     let mut dir_builder = std::fs::DirBuilder::new();
@@ -41,7 +39,7 @@ impl FileManager for FileManagerImpl {
     fn create_cmd_file(self: &Self) -> Result<(), String> {
         let t = self.home.join(&self.file_name);
         let commands_path = t.to_str().expect("could not convert path to string");
-        log_info!("Creating file: {}", &commands_path);
+        log_debug!("Creating file: {}", &commands_path);
         OpenOptions::new()
             .create(true)
             .write(true)

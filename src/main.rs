@@ -11,10 +11,9 @@ use services::{
 };
 use traits::{ file_manager::FileManager, inputable::Inputable, os_service::OSService };
 
-use crate::input::InputManager;
+use crate::services::input::InputManager;
 
 mod args;
-mod input;
 mod logging;
 mod program;
 mod cmd;
@@ -68,8 +67,15 @@ fn main() {
 }
 
 pub(crate) fn app(deps: &mut Deps) {
-    let command = &mut deps.args.clone().command;
-    match command {
+    let mut args = deps.args.clone();
+    let command = &mut args.command;
+
+    let cmd: Commands = match command {
+        Some(c) => c.clone(),
+        None => Commands::Get { pattern: args.get_command },
+    };
+
+    match cmd {
         Commands::Get { pattern } => {
             match cmd_get::get_command(&pattern, deps) {
                 Ok(_) => { log_info!("Completed successfully.") }
@@ -79,7 +85,7 @@ pub(crate) fn app(deps: &mut Deps) {
             }
         }
         Commands::Add { pattern, execute } => {
-            match cmd_add::add_command(*pattern, *execute, &deps) {
+            match cmd_add::add_command(pattern, execute, &deps) {
                 Ok(_) => { log_info!("Completed successfully.") }
                 Err(err) => {
                     log_error!("Error: {}", err.to_string());

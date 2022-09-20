@@ -1,67 +1,63 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug 'cmd get'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=cmd",
-                    "--package=cmd"
-                ],
-                "filter": {
-                    "name": "cmd",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "get"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug 'cmd add'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=cmd",
-                    "--package=cmd"
-                ],
-                "filter": {
-                    "name": "cmd",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "add"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'cmd'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=cmd",
-                    "--package=cmd"
-                ],
-                "filter": {
-                    "name": "cmd",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug 'cmd'",
+      "cargo": {
+        "args": ["build", "--bin=cmd", "--package=cmd"],
+        "filter": {
+          "name": "cmd",
+          "kind": "bin"
         }
-    ]
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug 'cmd get'",
+      "cargo": {
+        "args": ["build", "--bin=cmd", "--package=cmd"],
+        "filter": {
+          "name": "cmd",
+          "kind": "bin"
+        }
+      },
+      "args": ["get"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug 'cmd add'",
+      "cargo": {
+        "args": ["build", "--bin=cmd", "--package=cmd"],
+        "filter": {
+          "name": "cmd",
+          "kind": "bin"
+        }
+      },
+      "args": ["add"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'cmd'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=cmd", "--package=cmd"],
+        "filter": {
+          "name": "cmd",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
 }

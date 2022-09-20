@@ -1,12 +1,15 @@
 use clap::{ Parser, Subcommand };
 
-/// A fictional versioning CLI
+/// A commands manager tool
 #[derive(Debug, Parser, Clone)] // requires `derive` feature
 #[clap(name = "cmd")]
 #[clap(about = "A command line manager", long_about = None)]
 pub struct Cli {
     #[clap(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
+
+    #[clap(value_parser)]
+    pub get_command: Option<String>,
 
     #[clap(name = "verbose", long, short, parse(from_flag))]
     pub verbose: bool,

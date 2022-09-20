@@ -4,15 +4,18 @@ mod tests {
     use env_logger::Builder;
     // use assert_cmd::prelude::*; // Add methods on commands
 
+    use std::collections::{ HashSet, HashMap };
     use std::io::{ BufWriter, BufReader, Cursor };
+    use std::iter::Map;
     use std::sync::Once;
     use crate::args::{ Cli, Commands };
     use crate::cmd::cmd_add::add_command;
     use crate::cmd::cmd_get::get_command;
+    use crate::cmd_csv::{ read_cmd_file, CmdRecord };
     use crate::error::CmdError;
     use crate::services::cmd_service::build_cmd_service;
     use crate::services::controller::ConfigMem;
-    use crate::services::file_manager::MockFileManagerImpl;
+    use crate::services::file_manager::{ MockFileManagerImpl, FileManagerImpl, build_file_manager };
     use crate::services::os_service::MockOSServiceImpl;
     use crate::traits::inputable::{ MockInputable };
     use crate::{ FileManager, Deps, log_info, log_debug };
@@ -70,7 +73,8 @@ mod tests {
         let mem = ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) };
 
         let args: Cli = Cli {
-            command: Commands::Add { pattern: false, execute: false },
+            get_command: Some("".to_string()),
+            command: Some(Commands::Add { pattern: false, execute: false }),
             verbose: true,
         };
 
@@ -79,7 +83,7 @@ mod tests {
 
         let result = mock_opts.selected_record.clone();
 
-        mock_input.expect_select_option().returning_st(move |opts| {
+        mock_input.expect_select_option().returning_st(move |opts, _maybe_prompt| {
             log_debug!("Select an option:");
             for o in opts {
                 log_debug!("- {}", o);
@@ -148,6 +152,36 @@ mod tests {
 
         log_debug!("{:?}", deps.mem.get_commands());
         log_debug!("{:?}", deps.mem.get_used_commands());
+
+        Ok(())
+    }
+
+    // #[test]
+    fn clean_used() -> Result<(), CmdError> {
+        let used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
+
+        let mut reader = used_file_mgr.get_cmd_reader()?;
+        let commands = read_cmd_file(&mut reader);
+
+        let mut map: HashMap<usize, CmdRecord> = HashMap::new();
+
+        let gouped = commands.iter().fold(map, |mut acc, item| {
+            match acc.get(&item.id) {
+                Some(record) => {
+                    let new_record = record.clone();
+
+                    new_record.clone().used_times += item.used_times;
+
+                    acc.insert(item.id, new_record);
+                }
+                None => {
+                    acc.insert(item.id, item.clone());
+                }
+            }
+            acc
+        });
+
+        println!("{gouped:?}");
 
         Ok(())
     }
