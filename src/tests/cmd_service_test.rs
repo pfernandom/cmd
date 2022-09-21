@@ -6,10 +6,10 @@ mod cmd_service_test {
     use vfs::{ VfsPath, MemoryFS };
 
     use crate::{
-        services::cmd_service::build_cmd_service,
+        services::cmd_service_csv::build_cmd_csv_service,
         tests::{ mocks::file_manager::MockFileManager },
         traits::{ cmd_service::CmdService, file_manager::FileManager },
-        cmd_csv::{ CmdRecord, CmdRecordIterable },
+        models::cmd_record::{ CmdRecord, CmdRecordIterable },
         error,
         log_info,
         log_debug,
@@ -39,7 +39,7 @@ mod cmd_service_test {
         used_file_mgr.create_cmd_file()?;
 
         {
-            let mut cmd_service = build_cmd_service(&mut used_file_mgr)?;
+            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
 
             log_debug!("Run once");
             let ran_cmd = CmdRecord {
@@ -66,7 +66,7 @@ mod cmd_service_test {
         }
 
         {
-            let mut cmd_service = build_cmd_service(&mut used_file_mgr)?;
+            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
 
             log_debug!("Run twice");
             cmd_service.update_command(CmdRecord {
@@ -80,7 +80,7 @@ mod cmd_service_test {
             log_info!("Updated: {:?}", updated_commands);
         }
 
-        let cmd_service = build_cmd_service(&mut used_file_mgr)?;
+        let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
         let updated_commands = cmd_service.get_commands();
 
         assert_eq!(updated_commands.len(), used_records.len() + 1);

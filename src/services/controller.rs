@@ -1,4 +1,4 @@
-use crate::cmd_csv::{ CmdRecord, CmdRecordIterable };
+use crate::models::cmd_record::{ CmdRecord, CmdRecordIterable };
 use crate::error::CmdError;
 use crate::traits::cmd_service::CmdService;
 
@@ -8,11 +8,11 @@ pub struct ConfigMem<'a> {
 }
 
 impl<'a> ConfigMem<'a> {
-    pub fn get_commands(self: &Self) -> &Vec<CmdRecord> {
+    pub fn get_commands(self: &mut Self) -> &Vec<CmdRecord> {
         return &self.all.get_commands();
     }
 
-    pub fn get_used_commands(self: &Self) -> &Vec<CmdRecord> {
+    pub fn get_used_commands(self: &mut Self) -> &Vec<CmdRecord> {
         return &self.used.get_commands();
     }
 

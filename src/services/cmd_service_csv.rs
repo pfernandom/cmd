@@ -3,41 +3,42 @@ use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use crate::cmd_csv::{ CmdRecord, read_cmd_file };
+use crate::cmd_csv::{ read_cmd_file };
 
 use crate::error::CmdError;
 use crate::log_debug;
 
+use crate::models::cmd_record::CmdRecord;
 use crate::traits::cmd_service::CmdService;
 use crate::traits::file_manager::{ FileManager };
 
 #[derive(Debug)]
-pub struct CmdServiceImpl<'a, T, V> {
+pub struct CmdServiceCSV<'a, T, V> {
     counter: AtomicUsize,
     commands: Vec<CmdRecord>,
     pub file_mgr: &'a mut dyn FileManager<R = T, W = V>,
 }
-pub fn build_cmd_service<'a, T, V>(
+pub fn build_cmd_csv_service<'a, T, V>(
     file_mgr: &'a mut impl FileManager<R = T, W = V>
 )
-    -> Result<CmdServiceImpl<T, V>, String>
+    -> Result<CmdServiceCSV<T, V>, String>
     where T: Read, V: Write
 {
     let mut rdr = file_mgr.get_cmd_reader()?;
     let commands = read_cmd_file(&mut rdr);
     let counter = AtomicUsize::new(commands.len() + 1);
 
-    Ok(CmdServiceImpl { commands, counter, file_mgr })
+    Ok(CmdServiceCSV { commands, counter, file_mgr })
 }
 
-impl<'a, T, V> CmdServiceImpl<'a, T, V> {
+impl<'a, T, V> CmdServiceCSV<'a, T, V> {
     fn get_id(self: &Self) -> usize {
         let size = self.counter.fetch_add(1, Ordering::Relaxed);
         size
     }
 }
 
-impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Write {
+impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn add_command(self: &mut Self, command: String) -> Result<(), CmdError> {
         let id = self.get_id();
         let record = CmdRecord { id: id, command: String::from(&command), used_times: 1 };
@@ -74,7 +75,7 @@ impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Wri
         Ok(wtr.flush()?)
     }
 
-    fn get_commands(self: &Self) -> &Vec<CmdRecord> {
+    fn get_commands(self: &mut Self) -> &Vec<CmdRecord> {
         return &self.commands;
     }
 

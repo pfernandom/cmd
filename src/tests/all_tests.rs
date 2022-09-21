@@ -9,9 +9,10 @@ mod tests {
     use crate::args::{ Cli, Commands };
     use crate::cmd::cmd_add::add_command;
     use crate::cmd::cmd_get::get_command;
-    use crate::cmd_csv::{ read_cmd_file, CmdRecord, CmdRecordIterable };
+    use crate::cmd_csv::{ read_cmd_file };
+    use crate::models::cmd_record::{ CmdRecord, CmdRecordIterable };
     use crate::error::CmdError;
-    use crate::services::cmd_service::build_cmd_service;
+    use crate::services::cmd_service_csv::build_cmd_csv_service;
     use crate::services::controller::ConfigMem;
     use crate::services::file_manager::{ FileManagerImpl, build_file_manager };
     use crate::services::os_service::MockOSServiceImpl;
@@ -50,8 +51,8 @@ mod tests {
             all_file_mgr.create_cmd_file()?;
             used_file_mgr.create_cmd_file()?;
         }
-        let all_cmd_service = build_cmd_service(all_file_mgr)?;
-        let used_cmd_service = build_cmd_service(used_file_mgr)?;
+        let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
+        let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
 
         let mem = ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) };
 

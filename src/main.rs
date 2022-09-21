@@ -4,7 +4,7 @@ use log::LevelFilter;
 
 use clap::Parser;
 use services::{
-    cmd_service::{ build_cmd_service },
+    cmd_service_csv::{ build_cmd_csv_service },
     controller::ConfigMem,
     file_manager::{ build_file_manager, FileManagerImpl },
     os_service::OSServiceImpl,
@@ -23,6 +23,7 @@ mod cmd_utils;
 mod cmd_csv;
 mod traits;
 mod error;
+mod models;
 use args::{ Cli, Commands };
 
 pub struct Deps<'a> {
@@ -38,8 +39,8 @@ fn create_config<'a>(
 ) -> Result<ConfigMem<'a>, String> {
     all_file_mgr.create_cmd_file()?;
     used_file_mgr.create_cmd_file()?;
-    let all_cmd_service = build_cmd_service(all_file_mgr)?;
-    let used_cmd_service = build_cmd_service(used_file_mgr)?;
+    let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
+    let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
 
     Ok(ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
 }

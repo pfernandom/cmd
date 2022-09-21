@@ -1,6 +1,6 @@
 use regex::Regex;
 use std::collections::HashSet;
-use crate::{ *, error::CmdError, cmd_csv::CmdRecord };
+use crate::{ *, error::CmdError, models::cmd_record::CmdRecord };
 
 pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdError> {
     if deps.args.get_command.is_none() && deps.args.command.is_none() {
@@ -36,7 +36,7 @@ pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdE
 fn get_commands_list(
     commands: &Vec<CmdRecord>,
     filter: impl FnMut(&&CmdRecord) -> bool
-) -> Vec<cmd_csv::CmdRecord> {
+) -> Vec<models::cmd_record::CmdRecord> {
     let mut result = commands
         .clone()
         .iter()
