@@ -123,6 +123,7 @@ dependencies = [
  "serde",
  "termcolor",
  "thiserror",
+ "vfs",
 ]
 
 [[package]]
@@ -675,6 +676,12 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vfs"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1b1e0d0acf64feca12e658122b5ac3f0bea4178cbbb3f6532e05aec96f50759"
 
 [[package]]
 name = "wait-timeout"

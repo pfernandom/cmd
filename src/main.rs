@@ -4,7 +4,7 @@ use log::LevelFilter;
 
 use clap::Parser;
 use services::{
-    cmd_service::build_cmd_service,
+    cmd_service::{ build_cmd_service },
     controller::ConfigMem,
     file_manager::{ build_file_manager, FileManagerImpl },
     os_service::OSServiceImpl,
@@ -25,16 +25,17 @@ mod traits;
 mod error;
 use args::{ Cli, Commands };
 
-pub struct Deps {
+pub struct Deps<'a> {
     pub input: Box<dyn Inputable>,
     pub args: Cli,
-    pub mem: ConfigMem,
+    pub mem: ConfigMem<'a>,
     pub os: Box<dyn OSService>,
 }
 
-fn create_config() -> Result<ConfigMem, String> {
-    let all_file_mgr = build_file_manager("cmd.csv");
-    let used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
+fn create_config<'a>(
+    all_file_mgr: &'a mut FileManagerImpl,
+    used_file_mgr: &'a mut FileManagerImpl
+) -> Result<ConfigMem<'a>, String> {
     all_file_mgr.create_cmd_file()?;
     used_file_mgr.create_cmd_file()?;
     let all_cmd_service = build_cmd_service(all_file_mgr)?;
@@ -42,6 +43,7 @@ fn create_config() -> Result<ConfigMem, String> {
 
     Ok(ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
 }
+
 fn main() {
     let args = Cli::parse();
     let level = match args.verbose {
@@ -51,7 +53,10 @@ fn main() {
 
     Builder::new().filter_level(level).init();
 
-    let maybe_mem = create_config();
+    let mut all_file_mgr = build_file_manager("cmd.csv");
+    let mut used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
+
+    let maybe_mem = create_config(&mut all_file_mgr, &mut used_file_mgr);
 
     match maybe_mem {
         Ok(mem) => {
@@ -85,7 +90,7 @@ pub(crate) fn app(deps: &mut Deps) {
             }
         }
         Commands::Add { pattern, execute } => {
-            match cmd_add::add_command(pattern, execute, &deps) {
+            match cmd_add::add_command(pattern, execute, deps) {
                 Ok(_) => { log_info!("Completed successfully.") }
                 Err(err) => {
                     log_error!("Error: {}", err.to_string());

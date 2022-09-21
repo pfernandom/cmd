@@ -1,3 +1,5 @@
+use crate::log_debug;
+
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum CmdError {
     #[error("Error")] BaseError(String),
@@ -9,6 +11,7 @@ pub enum CmdError {
 
 impl std::convert::From<std::io::Error> for CmdError {
     fn from(err: std::io::Error) -> Self {
+        log_debug!("{:?}", err.raw_os_error());
         CmdError::OSProcessError(err.to_string())
     }
 }

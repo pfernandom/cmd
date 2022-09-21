@@ -8,33 +8,37 @@ use crate::cmd_csv::{ CmdRecord, read_cmd_file };
 use crate::error::CmdError;
 use crate::log_debug;
 
+use crate::traits::cmd_service::CmdService;
 use crate::traits::file_manager::{ FileManager };
 
 #[derive(Debug)]
-pub struct CmdServiceImpl {
+pub struct CmdServiceImpl<'a, T, V> {
     counter: AtomicUsize,
     commands: Vec<CmdRecord>,
-    file_mgr: Box<dyn FileManager<R = Box<dyn Read>, W = Box<dyn Write>>>,
+    pub file_mgr: &'a mut dyn FileManager<R = T, W = V>,
 }
-pub fn build_cmd_service<T>(file_mgr: T) -> Result<CmdServiceImpl, String>
-    where T: FileManager<R = Box<dyn Read>, W = Box<dyn Write>> + 'static
+pub fn build_cmd_service<'a, T, V>(
+    file_mgr: &'a mut impl FileManager<R = T, W = V>
+)
+    -> Result<CmdServiceImpl<T, V>, String>
+    where T: Read, V: Write
 {
     let mut rdr = file_mgr.get_cmd_reader()?;
     let commands = read_cmd_file(&mut rdr);
     let counter = AtomicUsize::new(commands.len() + 1);
 
-    Ok(CmdServiceImpl { commands, counter, file_mgr: Box::new(file_mgr) })
+    Ok(CmdServiceImpl { commands, counter, file_mgr })
 }
 
-impl CmdServiceImpl {
+impl<'a, T, V> CmdServiceImpl<'a, T, V> {
     fn get_id(self: &Self) -> usize {
         let size = self.counter.fetch_add(1, Ordering::Relaxed);
         size
     }
 }
 
-impl crate::traits::cmd_service::CmdService for CmdServiceImpl {
-    fn add_command(self: &Self, command: String) -> Result<(), CmdError> {
+impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Write {
+    fn add_command(self: &mut Self, command: String) -> Result<(), CmdError> {
         let id = self.get_id();
         let record = CmdRecord { id: id, command: String::from(&command), used_times: 1 };
         let exists = self.commands.iter().find(|x| x.command == record.command);
@@ -60,7 +64,7 @@ impl crate::traits::cmd_service::CmdService for CmdServiceImpl {
         self: &mut Self,
         mut updated_commands: Vec<CmdRecord>
     ) -> Result<(), CmdError> {
-        let mut wtr = self.file_mgr.get_cmd_writter(true)?;
+        let mut wtr = self.file_mgr.get_cmd_writter(false)?;
         updated_commands.sort_by(|a, b| b.used_times.cmp(&a.used_times));
         for cmd in &updated_commands {
             wtr.serialize(&cmd)?;
@@ -102,7 +106,6 @@ impl crate::traits::cmd_service::CmdService for CmdServiceImpl {
             false => record,
         };
 
-        log_debug!("list_is_empty:{}, record_exists:{}", list_is_empty, record_exists);
         if list_is_empty {
             log_debug!("Record to add: {:?}", final_record);
             return self.reset_commands(vec![final_record]);
@@ -112,7 +115,6 @@ impl crate::traits::cmd_service::CmdService for CmdServiceImpl {
             log_debug!("Updating {:?} with {:?}", updated_commands, final_record);
             updated_commands.append(&mut vec![final_record]);
         }
-        log_debug!("Reseting with {:?}", updated_commands);
         self.reset_commands(updated_commands)
     }
 

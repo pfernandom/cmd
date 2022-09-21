@@ -33,30 +33,27 @@ pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdE
     return get_matches(parsed, deps);
 }
 
-fn get_used_commands_list(
-    mem: &ConfigMem,
+fn get_commands_list(
+    commands: &Vec<CmdRecord>,
     filter: impl FnMut(&&CmdRecord) -> bool
 ) -> Vec<cmd_csv::CmdRecord> {
-    let mut result = mem
-        .get_used_commands()
+    let mut result = commands
         .clone()
         .iter()
         .filter(filter)
         .map(|x| x.clone())
         .collect::<Vec<_>>();
 
-    // result.sort_by(|a, b| a.used_times.cmp(&b.used_times));
+    result.sort_by(|a, b| a.used_times.cmp(&b.used_times));
     return result;
 }
 
 fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     let mem: &mut ConfigMem = &mut deps.mem;
 
-    log_debug!("{}", parsed);
     let re = Regex::new(&parsed).expect("could not parse regex");
 
-    let mut commands = mem.get_commands().clone();
-    println!("All commands: {:?}", commands);
+    let mut commands = mem.get_used_commands().clone();
 
     let set: HashSet<_> = commands
         .clone()
@@ -64,16 +61,16 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
         .map(|e| e.command)
         .collect::<HashSet<_>>(); // dedup
 
-    let used_commands = get_used_commands_list(mem, |x| !set.contains(&x.command));
+    let non_used_commands = get_commands_list(&mem.get_commands(), |x| !set.contains(&x.command));
 
-    commands.extend(used_commands);
+    commands.extend(non_used_commands);
+
+    commands.sort_by(|cmd1, cmd2| cmd2.used_times.cmp(&cmd1.used_times));
 
     let mut options = commands
         .iter()
         .map(|cm| cm.command.clone())
         .collect::<Vec<_>>();
-
-    log_debug!("opts:{:?}", options);
 
     options.retain(|option| re.is_match(option));
 
@@ -92,7 +89,13 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
         }
     };
 
-    let selected_cmd = options.get(selected_cmd_index).unwrap();
+    let selected_cmd = match options.get(selected_cmd_index) {
+        Some(res) => res,
+        None => {
+            log_error!("Could not get option {} for options {:?}", selected_cmd_index, options);
+            std::process::exit(1);
+        }
+    };
     let mut parsed_cmd = String::from(selected_cmd);
 
     let seleted_record = mem
@@ -147,10 +150,9 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
 fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     let mem: &mut ConfigMem = &mut deps.mem;
 
-    log_debug!("{}", parsed);
     let re = Regex::new(&parsed).expect("could not parse regex");
 
-    let commands = get_used_commands_list(mem, |_x| true);
+    let commands = get_commands_list(mem.get_used_commands(), |_x| true);
 
     println!("Used commands: {:?}", commands);
 

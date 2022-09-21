@@ -1,13 +1,13 @@
+use std::fs::File;
 use std::fs::OpenOptions;
 
 use std::io::Error;
-use std::io::Read;
-use std::io::Write;
 use std::path::PathBuf;
 use csv::Reader;
 use csv::Writer;
 use mockall::automock;
 use crate::log_debug;
+use crate::traits;
 use crate::traits::file_manager::{ FileManager };
 
 #[derive(Debug)]
@@ -17,7 +17,11 @@ pub struct FileManagerImpl {
     home: PathBuf,
 }
 
-pub fn build_file_manager(name: &str) -> FileManagerImpl {
+pub trait Dependable: traits::file_manager::FileManager {}
+
+impl Dependable for FileManagerImpl {}
+
+pub fn build_file_manager<'a>(name: &'a str) -> FileManagerImpl {
     let mut home = home::home_dir().expect("Could not find home dir");
     log_debug!("Saving settings to: {}/.cmd", home.to_str().expect("could not parse home path"));
 
@@ -33,9 +37,9 @@ pub fn build_file_manager(name: &str) -> FileManagerImpl {
 
 #[automock]
 impl FileManager for FileManagerImpl {
-    type W = Box<dyn Write>;
+    type W = File;
 
-    type R = Box<dyn Read>;
+    type R = File;
     fn create_cmd_file(self: &Self) -> Result<(), String> {
         let t = self.home.join(&self.file_name);
         let commands_path = t.to_str().expect("could not convert path to string");
@@ -49,7 +53,7 @@ impl FileManager for FileManagerImpl {
         Ok(())
     }
 
-    fn get_cmd_writter(self: &Self, append: bool) -> Result<Writer<Self::W>, String> {
+    fn get_cmd_writter(self: &mut Self, append: bool) -> Result<Writer<Self::W>, String> {
         log_debug!("Opening: {}", &self.path);
         let file = OpenOptions::new()
             .write(true)
@@ -58,10 +62,7 @@ impl FileManager for FileManagerImpl {
 
             .or_else(|err| Err(format!("Could not open file:{}: {:?}", &self.path, err)))?;
 
-        let w: Writer<Self::W> = csv::WriterBuilder
-            ::new()
-            .has_headers(false)
-            .from_writer(Box::new(file));
+        let w: Writer<Self::W> = csv::WriterBuilder::new().has_headers(false).from_writer(file);
         Ok(w)
     }
 
@@ -72,10 +73,7 @@ impl FileManager for FileManagerImpl {
             .open(&self.path)
             .or_else(|err| Err(format!("Could not open file:{}: {:?}", &self.path, err)))?;
 
-        let w: Reader<Self::R> = csv::ReaderBuilder
-            ::new()
-            .has_headers(false)
-            .from_reader(Box::new(file));
+        let w: Reader<Self::R> = csv::ReaderBuilder::new().has_headers(false).from_reader(file);
         Ok(w)
     }
 

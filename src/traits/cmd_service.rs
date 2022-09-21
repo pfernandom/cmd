@@ -1,7 +1,7 @@
 use crate::{ cmd_csv::CmdRecord, error::CmdError };
 
-pub trait CmdService {
-    fn add_command(self: &Self, command: String) -> Result<(), CmdError>;
+pub trait CmdService<'a> {
+    fn add_command(self: &mut Self, command: String) -> Result<(), CmdError>;
     fn update_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError>;
     fn is_record_present(self: &Self, record: &CmdRecord) -> bool;
     fn reset_commands(self: &mut Self, updated_commands: Vec<CmdRecord>) -> Result<(), CmdError>;

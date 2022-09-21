@@ -14,7 +14,8 @@ macro_rules! log_debug {
     ($($arg:tt)*) => {
         if log::log_enabled!(log::Level::Debug) {
             let st = format!($($arg)*);
-            $crate::logging::print_text(termcolor::Color::Rgb(128,128,128), &st);
+            println!("{} {}",file!(), line!());
+            $crate::logging::print_text(termcolor::Color::Rgb(128,128,128), &format!("{}:({}):{}", file!(), line!(), &st));
         }
     };
 }
