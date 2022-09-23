@@ -32,8 +32,8 @@ impl std::convert::From<csv::Error> for CmdError {
     }
 }
 
-impl std::convert::From<sqlite::Error> for CmdError {
-    fn from(err: sqlite::Error) -> Self {
+impl std::convert::From<rusqlite::Error> for CmdError {
+    fn from(err: rusqlite::Error) -> Self {
         CmdError::SQLError(err.to_string())
     }
 }

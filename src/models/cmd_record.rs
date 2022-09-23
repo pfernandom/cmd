@@ -1,6 +1,6 @@
 use std::{ borrow::Borrow, collections::HashMap };
-
 use serde::{ Serialize, Deserialize };
+use rusqlite::Row;
 use std::hash::Hash;
 
 #[derive(Debug, Deserialize, Serialize, Eq, Clone)]
@@ -17,6 +17,11 @@ pub struct CmdRecord {
 pub trait CmdRecordIterable {
     fn sum_count(self) -> usize;
 
+    fn group_and_sum_count<K: Hash + Eq + Clone>(
+        self,
+        get_key: impl FnMut(&CmdRecord) -> K
+    ) -> Vec<CmdRecord>;
+
     fn group_by<K: Hash + Eq + Clone>(
         self,
         key: impl FnMut(&CmdRecord) -> K
@@ -29,6 +34,26 @@ impl<I> CmdRecordIterable for I where I: Iterator, I::Item: Borrow<CmdRecord> {
             let b: &CmdRecord = el.borrow();
             acc + b.used_times
         })
+    }
+
+    fn group_and_sum_count<K: Hash + Eq + Clone>(
+        self,
+        get_key: impl FnMut(&CmdRecord) -> K
+    ) -> Vec<CmdRecord> {
+        let call_key = move || { get_key };
+        self.group_by(call_key())
+            .values()
+            .map(|vec_cmd| {
+                vec_cmd
+                    .iter()
+                    .map(|cmd| cmd.clone())
+                    .reduce(|mut acc, cur| {
+                        acc.used_times += cur.used_times;
+                        acc
+                    })
+                    .unwrap()
+            })
+            .collect::<Vec<CmdRecord>>()
     }
 
     fn group_by<K: Hash + Eq + Clone>(
@@ -78,5 +103,17 @@ impl CmdRecord {
 
     pub fn increase_usage(mut self: &mut Self) {
         self.used_times += 1;
+    }
+}
+
+impl From<&Row<'_>> for CmdRecord {
+    fn from(row: &Row<'_>) -> Self {
+        //serde_json::from_value::<CmdRecord>(FromSql(row));
+
+        CmdRecord {
+            id: row.get("id").expect("Could not parse ID"),
+            command: row.get("command").expect("Could not parse command"),
+            used_times: row.get("used_times").expect("Could not parse used_time"),
+        }
     }
 }

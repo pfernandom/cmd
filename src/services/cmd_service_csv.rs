@@ -3,11 +3,14 @@ use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use regex::Regex;
+
 use crate::cmd_csv::{ read_cmd_file };
 
 use crate::error::CmdError;
 use crate::log_debug;
 
+use crate::log_info;
 use crate::models::cmd_record::CmdRecord;
 use crate::traits::cmd_service::CmdService;
 use crate::traits::file_manager::{ FileManager };
@@ -75,14 +78,22 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
         Ok(wtr.flush()?)
     }
 
-    fn get_commands(self: &mut Self) -> &Vec<CmdRecord> {
-        return &self.commands;
+    fn get_commands(self: &mut Self, filter: Option<String>) -> Vec<CmdRecord> {
+        return match filter {
+            Some(parsed) => {
+                let re = Regex::new(&parsed).expect("could not parse regex");
+                let mut results = self.commands.clone();
+                results.retain(|cmd| re.is_match(&cmd.command));
+                return results;
+            }
+            None => self.commands.clone(),
+        };
     }
 
     fn update_command(self: &mut Self, record: CmdRecord) -> Result<(), CmdError> {
         let record_exists = self.is_record_present(&record);
         let mut updated_commands = self
-            .get_commands()
+            .get_commands(None)
             .iter()
             .map(|cmd| {
                 if cmd == &record {
@@ -126,5 +137,13 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
     fn clear_commands(self: &Self) -> Result<(), CmdError> {
         self.file_mgr.clear_files()?;
         Ok(())
+    }
+
+    fn insert_command(self: &mut Self, _command: CmdRecord) -> Result<(), CmdError> {
+        todo!()
+    }
+
+    fn debug(self: &Self) {
+        log_info!("No debug info")
     }
 }

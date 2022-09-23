@@ -30,6 +30,8 @@ pub enum Commands {
         pattern: Option<String>,
     },
     Clear {},
+
+    Debug {},
     // Stash(Stash),
     // #[clap(external_subcommand)] External(Vec<OsString>),
 }

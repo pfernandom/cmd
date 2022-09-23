@@ -4,10 +4,10 @@ use log::LevelFilter;
 
 use clap::Parser;
 use services::{
-    cmd_service_csv::{ build_cmd_csv_service },
-    controller::ConfigMem,
+    controller::Controller,
     file_manager::{ build_file_manager, FileManagerImpl },
     os_service::OSServiceImpl,
+    cmd_service_sql::CmdServiceSQL,
 };
 use traits::{ file_manager::FileManager, inputable::Inputable, os_service::OSService };
 
@@ -17,9 +17,8 @@ mod args;
 mod logging;
 mod program;
 mod cmd;
-mod services;
+pub mod services;
 mod tests;
-mod cmd_utils;
 mod cmd_csv;
 mod traits;
 mod error;
@@ -29,20 +28,23 @@ use args::{ Cli, Commands };
 pub struct Deps<'a> {
     pub input: Box<dyn Inputable>,
     pub args: Cli,
-    pub mem: ConfigMem<'a>,
+    pub mem: Controller<'a>,
     pub os: Box<dyn OSService>,
 }
 
 fn create_config<'a>(
     all_file_mgr: &'a mut FileManagerImpl,
     used_file_mgr: &'a mut FileManagerImpl
-) -> Result<ConfigMem<'a>, String> {
+) -> Result<Controller<'a>, String> {
     all_file_mgr.create_cmd_file()?;
     used_file_mgr.create_cmd_file()?;
-    let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
-    let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
+    // let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
+    // let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
 
-    Ok(ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
+    let all_cmd_service = CmdServiceSQL::build_cmd_service(None).unwrap();
+    let used_cmd_service = CmdServiceSQL::build_cmd_service(None).unwrap();
+
+    Ok(Controller { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
 }
 
 fn main() {
@@ -100,6 +102,10 @@ pub(crate) fn app(deps: &mut Deps) {
         }
         Commands::Clear {} => {
             cmd_clear::clear(&deps);
+        }
+        Commands::Debug {} => {
+            let ctrl = &deps.mem;
+            ctrl.debug();
         }
     }
 }

@@ -13,7 +13,7 @@ mod tests {
     use crate::models::cmd_record::{ CmdRecord, CmdRecordIterable };
     use crate::error::CmdError;
     use crate::services::cmd_service_csv::build_cmd_csv_service;
-    use crate::services::controller::ConfigMem;
+    use crate::services::controller::Controller;
     use crate::services::file_manager::{ FileManagerImpl, build_file_manager };
     use crate::services::os_service::MockOSServiceImpl;
     use crate::tests::mocks::file_manager::MockFileManager;
@@ -54,7 +54,7 @@ mod tests {
         let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
         let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
 
-        let mem = ConfigMem { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) };
+        let mem = Controller { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) };
 
         let args: Cli = Cli {
             get_command: Some("".to_string()),
@@ -205,7 +205,7 @@ mod tests {
             let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, false)?;
             let _result = get_command(&None, &mut deps);
 
-            results.push(deps.mem.get_used_commands().clone());
+            results.push(deps.mem.get_used_commands("".to_string()).clone());
         }
 
         let test_cmd = &results
@@ -247,8 +247,8 @@ mod tests {
         let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, true)?;
         get_command(&None, &mut deps)?;
 
-        log_debug!("{:?}", deps.mem.get_commands());
-        log_debug!("{:?}", deps.mem.get_used_commands());
+        log_debug!("{:?}", deps.mem.get_commands("".to_string()));
+        log_debug!("{:?}", deps.mem.get_used_commands("".to_string()));
 
         Ok(())
     }

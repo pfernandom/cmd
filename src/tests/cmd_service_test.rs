@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod cmd_service_test {
-    use std::sync::Once;
+    use std::{ sync::Once };
 
     use env_logger::Builder;
+    use rusqlite::Connection;
     use vfs::{ VfsPath, MemoryFS };
 
     use crate::{
-        services::cmd_service_csv::build_cmd_csv_service,
+        services::{ cmd_service_csv::build_cmd_csv_service, cmd_service_sql::CmdServiceSQL },
         tests::{ mocks::file_manager::MockFileManager },
         traits::{ cmd_service::CmdService, file_manager::FileManager },
         models::cmd_record::{ CmdRecord, CmdRecordIterable },
@@ -49,7 +50,7 @@ mod cmd_service_test {
             };
             cmd_service.update_command(ran_cmd.clone())?;
 
-            let updated_commands = cmd_service.get_commands();
+            let updated_commands = cmd_service.get_commands(None);
             let cmd_map = updated_commands.iter().group_by(|x| x.command.clone());
 
             let get_updated = cmd_map.get(&test_command);
@@ -75,15 +76,135 @@ mod cmd_service_test {
                 used_times: 3,
             })?;
 
-            let updated_commands = cmd_service.get_commands();
+            let updated_commands = cmd_service.get_commands(None);
 
             log_info!("Updated: {:?}", updated_commands);
         }
 
         let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
-        let updated_commands = cmd_service.get_commands();
+        let updated_commands = cmd_service.get_commands(None);
 
         assert_eq!(updated_commands.len(), used_records.len() + 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cmd_service_sql_test1() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+        )?;
+
+        cmd_service.add_command("git log".to_string())?;
+        cmd_service.add_command("git branch".to_string())?;
+        cmd_service.add_command("git commit -m {}".to_string())?;
+
+        let commands = cmd_service.get_commands(None);
+
+        log_debug!("Commands: {:?}", commands);
+
+        assert_eq!(commands.len(), 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cmd_service_sql_test2() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+        )?;
+
+        cmd_service.add_command("git log".to_string())?;
+        cmd_service.add_command("ls -l".to_string())?;
+        cmd_service.add_command("git commit -m {}".to_string())?;
+
+        let commands = cmd_service.get_commands(Some("ls".to_string()));
+
+        log_debug!("Commands: {:?}", commands);
+
+        assert_eq!(commands.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cmd_service_sql_test3() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+        )?;
+
+        cmd_service.add_command("git log".to_string())?;
+        cmd_service.add_command("ls -l".to_string())?;
+        cmd_service.add_command("git commit -m {}".to_string())?;
+
+        let mut commands = cmd_service.get_commands(Some("ls".to_string()));
+
+        log_debug!("Commands: {:?}", commands);
+
+        let first_usage = commands.first().unwrap().used_times;
+
+        {
+            for cmd in &mut commands {
+                cmd.increase_usage();
+                cmd_service.update_command(cmd.clone())?;
+            }
+        }
+
+        let commands2 = cmd_service.get_commands(Some("ls".to_string()));
+
+        log_debug!("Commands (after update): {:?}", commands2);
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands2.first().unwrap().used_times, first_usage + 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_cvs_test() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+            //None
+        )?;
+
+        {
+            // let saved_file_mgr: FileManagerImpl = build_file_manager("cmd.csv");
+            // let used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
+            let used_records = vec![
+                "1,git log,0",
+                "2,git branch,4",
+                "3,git commit -m {},1",
+                "3,git commit -m {},1",
+                "3,git commit -m {},1"
+            ];
+
+            let root: VfsPath = MemoryFS::new().into();
+
+            let saved_file_mgr = MockFileManager {
+                file_name: "save_file.csv",
+                root: &root,
+                initial_content: &used_records,
+            };
+
+            let used_file_mgr = MockFileManager {
+                file_name: "used_file.csv",
+                root: &root,
+                initial_content: &used_records,
+            };
+
+            saved_file_mgr.create_cmd_file()?;
+            used_file_mgr.create_cmd_file()?;
+
+            let _ = &cmd_service.migrate_cvs(saved_file_mgr, used_file_mgr)?;
+        }
+
+        let commands = cmd_service.get_commands(None);
+
+        log_debug!("Commands: {:?}", commands);
 
         Ok(())
     }
