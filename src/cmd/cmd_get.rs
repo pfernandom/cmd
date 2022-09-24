@@ -96,7 +96,7 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     };
     let mut parsed_cmd = String::from(selected_cmd);
 
-    let seleted_record = &mem
+    let selected_record = &mem
         .get_used_commands(parsed.clone())
         .get(selected_cmd_index)
         .unwrap_or_else(|| commands.get(selected_cmd_index).unwrap())
@@ -121,7 +121,7 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
 
             (parsed_cmd, 0)
         }
-        false => (parsed_cmd, seleted_record.used_times),
+        false => (parsed_cmd, selected_record.used_times),
     };
 
     log_debug!("Executing '{}'!", &final_cmd);
@@ -131,7 +131,7 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     match result {
         Ok(_) => {
             log_info!("Finalized successfully");
-            let mut new_cmd = seleted_record.to_owned().clone();
+            let mut new_cmd = selected_record.to_owned().clone();
             new_cmd.update_command(&final_cmd);
             new_cmd.used_times = final_count;
             match mem.add_used_command(new_cmd.to_owned()) {
@@ -176,7 +176,7 @@ fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     let selected_cmd = options.get(selected_cmd_index).unwrap();
     let mut parsed_cmd = String::from(selected_cmd);
 
-    let seleted_record = &mem
+    let selected_record = &mem
         .get_used_commands(parsed.clone())
         .get(selected_cmd_index)
         .unwrap_or_else(|| commands.get(selected_cmd_index).unwrap())
@@ -201,7 +201,7 @@ fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
 
             (parsed_cmd, 0)
         }
-        false => (parsed_cmd, seleted_record.used_times),
+        false => (parsed_cmd, selected_record.used_times),
     };
 
     log_debug!("Executing '{}'!", &final_cmd);
@@ -211,7 +211,7 @@ fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     match result {
         Ok(_) => {
             log_info!("Finalized successfully");
-            let mut new_cmd = seleted_record.to_owned().clone();
+            let mut new_cmd = selected_record.to_owned().clone();
             new_cmd.update_command(&final_cmd);
             new_cmd.used_times = final_count;
             match mem.add_used_command(new_cmd.to_owned()) {

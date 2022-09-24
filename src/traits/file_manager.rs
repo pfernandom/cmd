@@ -11,7 +11,7 @@ pub trait FileManager: std::fmt::Debug {
 
     fn create_cmd_file(self: &Self) -> Result<(), String>;
 
-    fn get_cmd_writter(self: &mut Self, append: bool) -> Result<Writer<Self::W>, String>;
+    fn get_cmd_writer(self: &mut Self, append: bool) -> Result<Writer<Self::W>, String>;
 
     fn get_cmd_reader(self: &Self) -> Result<Reader<Self::R>, String>;
 

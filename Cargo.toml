@@ -20,6 +20,7 @@ thiserror = "1.0.34"
 vfs = "0.7.1"
 rusqlite = "0.28.0"
 serde_json = "1.0.85"
+spy = "0.2.0"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"

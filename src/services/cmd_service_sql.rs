@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
 use rusqlite::Connection;
 
 use crate::{
     traits::{ cmd_service::CmdService, file_manager::FileManager },
     error::{ CmdError, self },
-    models::cmd_record::{ CmdRecord, CmdRecordIterable },
-    cmd_csv::read_cmd_file,
+    models::cmd_record::{ CmdRecord },
     log_debug,
     log_info,
+    services::cmd_service_csv::build_cmd_csv_service,
 };
 
 pub struct CmdServiceSQL {
@@ -44,28 +46,48 @@ impl CmdServiceSQL {
 
     pub fn migrate_cvs(
         &mut self,
-        saved_file_mgr: impl FileManager,
-        used_file_mgr: impl FileManager
+        mut saved_file_mgr: impl FileManager,
+        mut used_file_mgr: impl FileManager
     ) -> Result<(), CmdError> {
-        let mut reader = used_file_mgr.get_cmd_reader()?;
-        let used_commands = read_cmd_file(&mut reader);
+        let saved_cmd_service = build_cmd_csv_service(&mut saved_file_mgr, true)?;
+        let used_cmd_service = build_cmd_csv_service(&mut used_file_mgr, true)?;
 
-        let mut saved_reader = saved_file_mgr.get_cmd_reader()?;
-        let saved_commands = read_cmd_file(&mut saved_reader);
+        let mut cache: HashMap<String, CmdRecord> = HashMap::new();
 
-        let mut list = Vec::new();
-        list.extend(used_commands);
-        list.extend(saved_commands);
+        saved_cmd_service.for_each_record(|mut cmd| {
+            let c = {
+                match cache.get_mut(&cmd.command.clone()) {
+                    Some(cmd1) => {
+                        log_debug!("In cache! {}, {}", cmd1.command, cmd.used_times);
+                        cmd.used_times += cmd1.used_times;
+                        log_debug!("After update! {}, {}", cmd1.command, cmd.used_times);
+                        cmd
+                    }
+                    None => cmd,
+                }
+            };
+            log_debug!("Saving! {}, {}", c.command, c.used_times);
+            let _ = &self.insert_command(c.clone()).expect("Could not save record");
+            cache.insert(c.command.clone(), c);
+        });
 
-        log_debug!("Before: {:?}", list);
+        let mut cache: HashMap<String, CmdRecord> = HashMap::new();
 
-        let result = list.iter().group_and_sum_count(|cmd| cmd.command.clone());
+        used_cmd_service.for_each_record(|mut cmd| {
+            let c = {
+                match cache.get_mut(&cmd.command.clone()) {
+                    Some(cmd1) => {
+                        cmd.used_times += cmd1.used_times;
+                        cmd
+                    }
+                    None => cmd,
+                }
+            };
 
-        log_debug!("SET: {:?}", &result);
-
-        for r in result {
-            self.insert_command(r.clone())?;
-        }
+            log_debug!("Saving! {}, {}", c.command, c.used_times);
+            let _ = &self.insert_command(c.clone()).expect("Could not save record");
+            cache.insert(c.command.clone(), c);
+        });
 
         Ok(())
     }
@@ -158,7 +180,7 @@ impl CmdService<'_> for CmdServiceSQL {
 
     fn insert_command(self: &mut Self, cmd: CmdRecord) -> Result<(), CmdError> {
         self.connection.execute(
-            "INSERT INTO cmd (command, used_times) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+            "INSERT  OR REPLACE INTO cmd (command, used_times) VALUES (?1, ?2)",
             (&cmd.command, &cmd.used_times)
         )?;
 
@@ -174,7 +196,7 @@ impl CmdService<'_> for CmdServiceSQL {
             .query_map([], |row|
                 Ok(
                     format!(
-                        "There are {} used commands that have beed used {} times",
+                        "There are {} used commands that have been used {} times",
                         row.get::<usize, usize>(0).unwrap(),
                         row.get::<usize, usize>(1).unwrap()
                     )

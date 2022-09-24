@@ -53,7 +53,7 @@ impl FileManager for FileManagerImpl {
         Ok(())
     }
 
-    fn get_cmd_writter(self: &mut Self, append: bool) -> Result<Writer<Self::W>, String> {
+    fn get_cmd_writer(self: &mut Self, append: bool) -> Result<Writer<Self::W>, String> {
         log_debug!("Opening: {}", &self.path);
         let file = OpenOptions::new()
             .write(true)

@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use env_logger::Builder;
+    use rusqlite::Connection;
     use vfs::{ VfsPath, MemoryFS };
     // use assert_cmd::prelude::*; // Add methods on commands
     use std::collections::{ HashMap };
@@ -13,6 +14,7 @@ mod tests {
     use crate::models::cmd_record::{ CmdRecord, CmdRecordIterable };
     use crate::error::CmdError;
     use crate::services::cmd_service_csv::build_cmd_csv_service;
+    use crate::services::cmd_service_sql::CmdServiceSQL;
     use crate::services::controller::Controller;
     use crate::services::file_manager::{ FileManagerImpl, build_file_manager };
     use crate::services::os_service::MockOSServiceImpl;
@@ -51,10 +53,15 @@ mod tests {
             all_file_mgr.create_cmd_file()?;
             used_file_mgr.create_cmd_file()?;
         }
-        let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
-        let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
+        let all_cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+            //None
+        )?;
 
-        let mem = Controller { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) };
+        // let all_cmd_service = build_cmd_csv_service(all_file_mgr, false)?;
+        // let used_cmd_service = build_cmd_csv_service(used_file_mgr, false)?;
+
+        let mem = Controller { all: Box::new(all_cmd_service), used: Box::new(all_cmd_service) };
 
         let args: Cli = Cli {
             get_command: Some("".to_string()),
@@ -297,7 +304,7 @@ mod tests {
 
         let map: HashMap<String, CmdRecord> = HashMap::new();
 
-        let gouped = commands.iter().fold(map, |mut acc, item| {
+        let grouped = commands.iter().fold(map, |mut acc, item| {
             match acc.get(&item.command) {
                 Some(record) => {
                     let mut new_record = record.clone();
@@ -313,11 +320,11 @@ mod tests {
             acc
         });
 
-        println!("{gouped:?}, {saved_commands:?}");
+        println!("{grouped:?}, {saved_commands:?}");
 
-        let mut writer = used_file_mgr.get_cmd_writter(false)?;
+        let mut writer = used_file_mgr.get_cmd_writer(false)?;
 
-        for x in gouped.values() {
+        for x in grouped.values() {
             print!("Write {x:?}");
             writer.serialize(x)?;
         }

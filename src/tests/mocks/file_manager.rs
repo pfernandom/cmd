@@ -35,7 +35,7 @@ impl<'a> FileManager for MockFileManager<'a> {
         Ok(())
     }
 
-    fn get_cmd_writter(self: &mut Self, append: bool) -> Result<csv::Writer<Self::W>, String> {
+    fn get_cmd_writer(self: &mut Self, append: bool) -> Result<csv::Writer<Self::W>, String> {
         let path = self.root.join(self.file_name).unwrap();
         let f = if append { path.append_file().unwrap() } else { path.create_file().unwrap() };
         Ok(WriterBuilder::new().has_headers(false).from_writer(f))

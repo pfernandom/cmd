@@ -7,7 +7,11 @@ mod cmd_service_test {
     use vfs::{ VfsPath, MemoryFS };
 
     use crate::{
-        services::{ cmd_service_csv::build_cmd_csv_service, cmd_service_sql::CmdServiceSQL },
+        services::{
+            cmd_service_csv::build_cmd_csv_service,
+            cmd_service_sql::CmdServiceSQL,
+            file_manager::{ FileManagerImpl, build_file_manager },
+        },
         tests::{ mocks::file_manager::MockFileManager },
         traits::{ cmd_service::CmdService, file_manager::FileManager },
         models::cmd_record::{ CmdRecord, CmdRecordIterable },
@@ -40,7 +44,7 @@ mod cmd_service_test {
         used_file_mgr.create_cmd_file()?;
 
         {
-            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
+            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr, false)?;
 
             log_debug!("Run once");
             let ran_cmd = CmdRecord {
@@ -67,7 +71,7 @@ mod cmd_service_test {
         }
 
         {
-            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
+            let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr, false)?;
 
             log_debug!("Run twice");
             cmd_service.update_command(CmdRecord {
@@ -81,7 +85,7 @@ mod cmd_service_test {
             log_info!("Updated: {:?}", updated_commands);
         }
 
-        let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr)?;
+        let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr, false)?;
         let updated_commands = cmd_service.get_commands(None);
 
         assert_eq!(updated_commands.len(), used_records.len() + 1);
@@ -130,7 +134,7 @@ mod cmd_service_test {
     }
 
     #[test]
-    fn cmd_service_sql_test3() -> Result<(), error::CmdError> {
+    fn cmd_service_sql_add() -> Result<(), error::CmdError> {
         initialize();
         let mut cmd_service = CmdServiceSQL::build_cmd_service(
             Some(Connection::open_in_memory()?)
@@ -159,6 +163,31 @@ mod cmd_service_test {
 
         assert_eq!(commands.len(), 1);
         assert_eq!(commands2.first().unwrap().used_times, first_usage + 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cmd_service_sql_insert() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(
+            Some(Connection::open_in_memory()?)
+        )?;
+
+        for x in 1..10 {
+            let cmd = CmdRecord {
+                id: 1,
+                command: String::from("git log"),
+                used_times: x,
+            };
+
+            cmd_service.insert_command(cmd)?;
+        }
+
+        let commands = cmd_service.get_commands(Some("git log".to_string()));
+
+        log_debug!("Commands: {:?}", commands);
+        assert_eq!(commands.len(), 1);
 
         Ok(())
     }
@@ -195,6 +224,36 @@ mod cmd_service_test {
                 root: &root,
                 initial_content: &used_records,
             };
+
+            saved_file_mgr.create_cmd_file()?;
+            used_file_mgr.create_cmd_file()?;
+
+            let _ = &cmd_service.migrate_cvs(saved_file_mgr, used_file_mgr)?;
+        }
+
+        let commands = cmd_service.get_commands(None);
+
+        assert_eq!(
+            commands
+                .iter()
+                .map(|cmd| format!("{},{}", cmd.command, cmd.used_times))
+                .collect::<Vec<String>>(),
+            vec!["git log,0", "git branch,4", "git commit -m {},3"]
+        );
+
+        log_debug!("Commands: {:?}", commands);
+
+        Ok(())
+    }
+
+    // #[test]
+    fn migrate_cvs_test_prod() -> Result<(), error::CmdError> {
+        initialize();
+        let mut cmd_service = CmdServiceSQL::build_cmd_service(None)?;
+
+        {
+            let saved_file_mgr: FileManagerImpl = build_file_manager("cmd.csv");
+            let used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
 
             saved_file_mgr.create_cmd_file()?;
             used_file_mgr.create_cmd_file()?;

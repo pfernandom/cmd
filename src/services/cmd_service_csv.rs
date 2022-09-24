@@ -22,22 +22,37 @@ pub struct CmdServiceCSV<'a, T, V> {
     pub file_mgr: &'a mut dyn FileManager<R = T, W = V>,
 }
 pub fn build_cmd_csv_service<'a, T, V>(
-    file_mgr: &'a mut impl FileManager<R = T, W = V>
+    file_mgr: &'a mut impl FileManager<R = T, W = V>,
+    lazy: bool
 )
     -> Result<CmdServiceCSV<T, V>, String>
     where T: Read, V: Write
 {
     let mut rdr = file_mgr.get_cmd_reader()?;
+
+    if lazy {
+        return Ok(CmdServiceCSV { commands: Vec::new(), counter: AtomicUsize::new(1), file_mgr });
+    }
+
     let commands = read_cmd_file(&mut rdr);
     let counter = AtomicUsize::new(commands.len() + 1);
 
     Ok(CmdServiceCSV { commands, counter, file_mgr })
 }
 
-impl<'a, T, V> CmdServiceCSV<'a, T, V> {
+impl<'a, T, V> CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn get_id(self: &Self) -> usize {
         let size = self.counter.fetch_add(1, Ordering::Relaxed);
         size
+    }
+
+    pub fn for_each_record(self: &Self, mut process: impl FnMut(CmdRecord)) {
+        let mut reader = self.file_mgr.get_cmd_reader().expect("Could not get the reader");
+        for i in reader.deserialize() {
+            if let Ok(cmd) = i {
+                process(cmd);
+            }
+        }
     }
 }
 
@@ -50,9 +65,9 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
         if let Some(_) = exists {
             return Err(CmdError::DuplicateCmdError);
         }
-        let mut wtr = self.file_mgr.get_cmd_writter(true)?;
+        let mut wtr = self.file_mgr.get_cmd_writer(true)?;
         wtr.serialize(&record).or_else(|err| Err(CmdError::from(err)))?;
-        wtr.flush().expect("clould not save csv file");
+        wtr.flush().expect("could not save csv file");
         log_debug!("Command saved");
         Ok(())
     }
@@ -68,7 +83,7 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
         self: &mut Self,
         mut updated_commands: Vec<CmdRecord>
     ) -> Result<(), CmdError> {
-        let mut wtr = self.file_mgr.get_cmd_writter(false)?;
+        let mut wtr = self.file_mgr.get_cmd_writer(false)?;
         updated_commands.sort_by(|a, b| b.used_times.cmp(&a.used_times));
         for cmd in &updated_commands {
             wtr.serialize(&cmd)?;

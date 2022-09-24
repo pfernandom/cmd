@@ -134,6 +134,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "spy",
  "termcolor",
  "thiserror",
  "vfs",
@@ -666,6 +667,12 @@ name = "smallvec"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
+
+[[package]]
+name = "spy"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "855ffcaee021604e77af7e3246dd1ed896354889788581177d4d2c2bec09f899"
 
 [[package]]
 name = "strsim"
