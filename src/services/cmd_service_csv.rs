@@ -3,41 +3,66 @@ use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use crate::cmd_csv::{ CmdRecord, read_cmd_file };
+use regex::Regex;
+
+use crate::cmd_csv::{ read_cmd_file };
 
 use crate::error::CmdError;
 use crate::log_debug;
 
+use crate::log_info;
+use crate::models::cmd_record::CmdRecord;
 use crate::traits::cmd_service::CmdService;
+use crate::traits::cmd_service::SearchFilters;
 use crate::traits::file_manager::{ FileManager };
 
+#[deny(warnings)]
 #[derive(Debug)]
-pub struct CmdServiceImpl<'a, T, V> {
+#[deprecated]
+pub struct CmdServiceCSV<'a, T, V> {
     counter: AtomicUsize,
     commands: Vec<CmdRecord>,
     pub file_mgr: &'a mut dyn FileManager<R = T, W = V>,
 }
-pub fn build_cmd_service<'a, T, V>(
-    file_mgr: &'a mut impl FileManager<R = T, W = V>
+#[allow(warnings)]
+pub fn build_cmd_csv_service<'a, T, V>(
+    file_mgr: &'a mut impl FileManager<R = T, W = V>,
+    lazy: bool
 )
-    -> Result<CmdServiceImpl<T, V>, String>
+    -> Result<CmdServiceCSV<T, V>, String>
     where T: Read, V: Write
 {
     let mut rdr = file_mgr.get_cmd_reader()?;
+
+    if lazy {
+        return Ok(CmdServiceCSV { commands: Vec::new(), counter: AtomicUsize::new(1), file_mgr });
+    }
+
     let commands = read_cmd_file(&mut rdr);
     let counter = AtomicUsize::new(commands.len() + 1);
 
-    Ok(CmdServiceImpl { commands, counter, file_mgr })
+    Ok(CmdServiceCSV { commands, counter, file_mgr })
 }
 
-impl<'a, T, V> CmdServiceImpl<'a, T, V> {
+#[allow(warnings)]
+impl<'a, T, V> CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn get_id(self: &Self) -> usize {
         let size = self.counter.fetch_add(1, Ordering::Relaxed);
         size
     }
+
+    pub fn for_each_record(self: &Self, mut process: impl FnMut(CmdRecord)) {
+        let mut reader = self.file_mgr.get_cmd_reader().expect("Could not get the reader");
+        for i in reader.deserialize() {
+            if let Ok(cmd) = i {
+                process(cmd);
+            }
+        }
+    }
 }
 
-impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Write {
+#[allow(warnings)]
+impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn add_command(self: &mut Self, command: String) -> Result<(), CmdError> {
         let id = self.get_id();
         let record = CmdRecord { id: id, command: String::from(&command), used_times: 1 };
@@ -46,9 +71,9 @@ impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Wri
         if let Some(_) = exists {
             return Err(CmdError::DuplicateCmdError);
         }
-        let mut wtr = self.file_mgr.get_cmd_writter(true)?;
+        let mut wtr = self.file_mgr.get_cmd_writer(true)?;
         wtr.serialize(&record).or_else(|err| Err(CmdError::from(err)))?;
-        wtr.flush().expect("clould not save csv file");
+        wtr.flush().expect("could not save csv file");
         log_debug!("Command saved");
         Ok(())
     }
@@ -64,7 +89,7 @@ impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Wri
         self: &mut Self,
         mut updated_commands: Vec<CmdRecord>
     ) -> Result<(), CmdError> {
-        let mut wtr = self.file_mgr.get_cmd_writter(false)?;
+        let mut wtr = self.file_mgr.get_cmd_writer(false)?;
         updated_commands.sort_by(|a, b| b.used_times.cmp(&a.used_times));
         for cmd in &updated_commands {
             wtr.serialize(&cmd)?;
@@ -74,14 +99,22 @@ impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Wri
         Ok(wtr.flush()?)
     }
 
-    fn get_commands(self: &Self) -> &Vec<CmdRecord> {
-        return &self.commands;
+    fn get_commands(self: &mut Self, filter: SearchFilters) -> Vec<CmdRecord> {
+        return match filter.command {
+            Some(parsed) => {
+                let re = Regex::new(&parsed).expect("could not parse regex");
+                let mut results = self.commands.clone();
+                results.retain(|cmd| re.is_match(&cmd.command));
+                return results;
+            }
+            None => self.commands.clone(),
+        };
     }
 
     fn update_command(self: &mut Self, record: CmdRecord) -> Result<(), CmdError> {
         let record_exists = self.is_record_present(&record);
         let mut updated_commands = self
-            .get_commands()
+            .get_commands(SearchFilters::default())
             .iter()
             .map(|cmd| {
                 if cmd == &record {
@@ -125,5 +158,13 @@ impl<'a, T, V> CmdService<'a> for CmdServiceImpl<'a, T, V> where T: Read, V: Wri
     fn clear_commands(self: &Self) -> Result<(), CmdError> {
         self.file_mgr.clear_files()?;
         Ok(())
+    }
+
+    fn insert_command(self: &mut Self, _command: CmdRecord) -> Result<(), CmdError> {
+        todo!()
+    }
+
+    fn debug(self: &Self) {
+        log_info!("No debug info")
     }
 }

@@ -6,6 +6,7 @@ pub enum CmdError {
     #[error("Cannot run command")] OSProcessError(String),
     #[error("The command already exists")] DuplicateCmdError,
     #[error("CSV error")] CSVError(String),
+    #[error("SQL error")] SQLError(String),
     #[error("Failed serializing/deserializing record")] CSVSerdeError(String),
 }
 
@@ -28,5 +29,11 @@ impl std::convert::From<csv::Error> for CmdError {
             csv::ErrorKind::Deserialize { pos: _, err } => CmdError::CSVSerdeError(err.to_string()),
             _ => CmdError::CSVError("There was an error with the CSV file".to_string()),
         }
+    }
+}
+
+impl std::convert::From<rusqlite::Error> for CmdError {
+    fn from(err: rusqlite::Error) -> Self {
+        CmdError::SQLError(err.to_string())
     }
 }
