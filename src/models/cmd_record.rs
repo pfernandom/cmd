@@ -108,8 +108,6 @@ impl CmdRecord {
 
 impl From<&Row<'_>> for CmdRecord {
     fn from(row: &Row<'_>) -> Self {
-        //serde_json::from_value::<CmdRecord>(FromSql(row));
-
         CmdRecord {
             id: row.get("id").expect("Could not parse ID"),
             command: row.get("command").expect("Could not parse command"),

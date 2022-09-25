@@ -3,7 +3,6 @@ mod tests {
     use env_logger::Builder;
     use rusqlite::Connection;
     use std::cell::RefCell;
-    // use assert_cmd::prelude::*; // Add methods on commands
     use std::collections::{ HashMap };
     use std::io::{ BufWriter, Cursor, Write, Read };
     use std::rc::Rc;
