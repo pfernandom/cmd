@@ -1,10 +1,13 @@
+use std::{ rc::Rc, cell::RefCell };
+
 use cmd::{ cmd_get, cmd_add, cmd_clear };
 use env_logger::Builder;
 use log::LevelFilter;
+extern crate derive_builder;
 
 use clap::Parser;
 use services::{
-    controller::Controller,
+    controller::{ Controller, RefCmdService },
     file_manager::{ build_file_manager, FileManagerImpl },
     os_service::OSServiceImpl,
     cmd_service_sql::CmdServiceSQL,
@@ -41,10 +44,11 @@ fn create_config<'a>(
     // let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
     // let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
 
-    let all_cmd_service = CmdServiceSQL::build_cmd_service(None).unwrap();
-    let used_cmd_service = CmdServiceSQL::build_cmd_service(None).unwrap();
+    let all_cmd_service: RefCmdService<'_> = Rc::new(
+        RefCell::new(CmdServiceSQL::build_cmd_service(None).unwrap())
+    );
 
-    Ok(Controller { all: Box::new(all_cmd_service), used: Box::new(used_cmd_service) })
+    Ok(Controller { all: Rc::clone(&all_cmd_service), used: Rc::clone(&all_cmd_service) })
 }
 
 fn main() {

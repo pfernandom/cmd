@@ -4,7 +4,7 @@ use crate::{ * };
 use csv::{ WriterBuilder, Reader, ReaderBuilder };
 use vfs::{ VfsPath, SeekAndRead };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MockFileManager<'a> {
     pub file_name: &'a str,
     pub root: &'a VfsPath,

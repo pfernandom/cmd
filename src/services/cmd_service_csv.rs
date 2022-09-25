@@ -13,14 +13,18 @@ use crate::log_debug;
 use crate::log_info;
 use crate::models::cmd_record::CmdRecord;
 use crate::traits::cmd_service::CmdService;
+use crate::traits::cmd_service::SearchFilters;
 use crate::traits::file_manager::{ FileManager };
 
+#[deny(warnings)]
 #[derive(Debug)]
+#[deprecated]
 pub struct CmdServiceCSV<'a, T, V> {
     counter: AtomicUsize,
     commands: Vec<CmdRecord>,
     pub file_mgr: &'a mut dyn FileManager<R = T, W = V>,
 }
+#[allow(warnings)]
 pub fn build_cmd_csv_service<'a, T, V>(
     file_mgr: &'a mut impl FileManager<R = T, W = V>,
     lazy: bool
@@ -40,6 +44,7 @@ pub fn build_cmd_csv_service<'a, T, V>(
     Ok(CmdServiceCSV { commands, counter, file_mgr })
 }
 
+#[allow(warnings)]
 impl<'a, T, V> CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn get_id(self: &Self) -> usize {
         let size = self.counter.fetch_add(1, Ordering::Relaxed);
@@ -56,6 +61,7 @@ impl<'a, T, V> CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     }
 }
 
+#[allow(warnings)]
 impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn add_command(self: &mut Self, command: String) -> Result<(), CmdError> {
         let id = self.get_id();
@@ -93,8 +99,8 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
         Ok(wtr.flush()?)
     }
 
-    fn get_commands(self: &mut Self, filter: Option<String>) -> Vec<CmdRecord> {
-        return match filter {
+    fn get_commands(self: &mut Self, filter: SearchFilters) -> Vec<CmdRecord> {
+        return match filter.command {
             Some(parsed) => {
                 let re = Regex::new(&parsed).expect("could not parse regex");
                 let mut results = self.commands.clone();
@@ -108,7 +114,7 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
     fn update_command(self: &mut Self, record: CmdRecord) -> Result<(), CmdError> {
         let record_exists = self.is_record_present(&record);
         let mut updated_commands = self
-            .get_commands(None)
+            .get_commands(SearchFilters::default())
             .iter()
             .map(|cmd| {
                 if cmd == &record {

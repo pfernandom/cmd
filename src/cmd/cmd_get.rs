@@ -132,9 +132,10 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
         Ok(_) => {
             log_info!("Finalized successfully");
             let mut new_cmd = selected_record.to_owned().clone();
-            new_cmd.update_command(&final_cmd);
+            // new_cmd.update_command(&final_cmd);
+            let alias = if final_cmd.eq(&selected_record.command) { None } else { Some(final_cmd) };
             new_cmd.used_times = final_count;
-            match mem.add_used_command(new_cmd.to_owned()) {
+            match mem.add_used_command(new_cmd.to_owned(), alias) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err.into()),
             }
@@ -212,9 +213,10 @@ fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
         Ok(_) => {
             log_info!("Finalized successfully");
             let mut new_cmd = selected_record.to_owned().clone();
-            new_cmd.update_command(&final_cmd);
+            // new_cmd.update_command(&final_cmd);
+            let alias = if final_cmd.eq(&selected_record.command) { None } else { Some(final_cmd) };
             new_cmd.used_times = final_count;
-            match mem.add_used_command(new_cmd.to_owned()) {
+            match mem.add_used_command(new_cmd.to_owned(), alias) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err.into()),
             }

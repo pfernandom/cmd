@@ -2,10 +2,11 @@
 mod tests {
     use env_logger::Builder;
     use rusqlite::Connection;
-    use vfs::{ VfsPath, MemoryFS };
+    use std::cell::RefCell;
     // use assert_cmd::prelude::*; // Add methods on commands
     use std::collections::{ HashMap };
     use std::io::{ BufWriter, Cursor, Write, Read };
+    use std::rc::Rc;
     use std::sync::Once;
     use crate::args::{ Cli, Commands };
     use crate::cmd::cmd_add::add_command;
@@ -13,14 +14,13 @@ mod tests {
     use crate::cmd_csv::{ read_cmd_file };
     use crate::models::cmd_record::{ CmdRecord, CmdRecordIterable };
     use crate::error::CmdError;
-    use crate::services::cmd_service_csv::build_cmd_csv_service;
     use crate::services::cmd_service_sql::CmdServiceSQL;
     use crate::services::controller::Controller;
     use crate::services::file_manager::{ FileManagerImpl, build_file_manager };
     use crate::services::os_service::MockOSServiceImpl;
-    use crate::tests::mocks::file_manager::MockFileManager;
+    use crate::traits::cmd_service::CmdService;
     use crate::traits::inputable::{ MockInputable };
-    use crate::{ FileManager, Deps, log_info, log_debug };
+    use crate::{ FileManager, Deps, log_info, log_debug, log_error };
 
     static INIT: Once = Once::new();
 
@@ -43,25 +43,30 @@ mod tests {
 
     fn get_deps<'a>(
         mut mock_opts: MockOpts<'static>,
-        all_file_mgr: &'a mut MockFileManager,
-        used_file_mgr: &'a mut MockFileManager,
-        create_files: bool
+        all: Vec<&str>
     ) -> Result<Deps<'a>, CmdError> {
         //build_file_manager("cmd_used.csv");
 
-        if create_files {
-            all_file_mgr.create_cmd_file()?;
-            used_file_mgr.create_cmd_file()?;
-        }
-        let all_cmd_service = CmdServiceSQL::build_cmd_service(
+        let mut cmd_service_sql = CmdServiceSQL::build_cmd_service(
             Some(Connection::open_in_memory()?)
             //None
         )?;
 
+        for cmd in all {
+            cmd_service_sql.add_command(cmd.split(",").nth(1).unwrap().to_string())?;
+        }
+
+        let all_cmd_service: Rc<RefCell<dyn CmdService<'_>>> = Rc::new(
+            RefCell::new(cmd_service_sql)
+        );
+
         // let all_cmd_service = build_cmd_csv_service(all_file_mgr, false)?;
         // let used_cmd_service = build_cmd_csv_service(used_file_mgr, false)?;
 
-        let mem = Controller { all: Box::new(all_cmd_service), used: Box::new(all_cmd_service) };
+        let mem = Controller {
+            all: Rc::clone(&all_cmd_service),
+            used: Rc::clone(&all_cmd_service),
+        };
 
         let args: Cli = Cli {
             get_command: Some("".to_string()),
@@ -96,25 +101,12 @@ mod tests {
     fn it_works() -> Result<(), Box<dyn std::error::Error>> {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
-        let used_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
         let mock_opts = MockOpts {
             selected_record: Box::new(|_opts| { 0 }),
         };
-        let root: VfsPath = MemoryFS::new().into();
-        let mut all_file_mgr = MockFileManager {
-            file_name: "all_file.csv",
-            root: &root,
-            initial_content: &all_records,
-        };
-        // = build_file_manager("cmd.csv");
-        let mut used_file_mgr = MockFileManager {
-            file_name: "used_file.csv",
-            root: &root,
-            initial_content: &used_records,
-        };
 
-        let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, true)?;
+        let mut deps = get_deps(mock_opts, all_records)?;
         crate::app(&mut deps);
 
         Ok(())
@@ -124,28 +116,12 @@ mod tests {
     fn add_command_test() -> Result<(), CmdError> {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
-        let used_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
         let mock_opts = MockOpts {
             selected_record: Box::new(|_opts| { 0 }),
         };
-        let root: VfsPath = MemoryFS::new().into();
-        let mut all_file_mgr = MockFileManager {
-            file_name: "all_file.csv",
-            root: &root,
-            initial_content: &all_records,
-        };
-        // = build_file_manager("cmd.csv");
-        let mut used_file_mgr = MockFileManager {
-            file_name: "used_file.csv",
-            root: &root,
-            initial_content: &used_records,
-        };
 
-        all_file_mgr.create_cmd_file()?;
-        used_file_mgr.create_cmd_file()?;
-
-        let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, true)?;
+        let mut deps = get_deps(mock_opts, all_records)?;
         let result = add_command(false, true, &mut deps);
 
         result
@@ -155,25 +131,12 @@ mod tests {
     fn get_command_test() -> Result<(), CmdError> {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
-        let used_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
         let mock_opts = MockOpts {
             selected_record: Box::new(|_opts| { 0 }),
         };
-        let root: VfsPath = MemoryFS::new().into();
-        let mut all_file_mgr = MockFileManager {
-            file_name: "all_file.csv",
-            root: &root,
-            initial_content: &all_records,
-        };
-        // = build_file_manager("cmd.csv");
-        let mut used_file_mgr = MockFileManager {
-            file_name: "used_file.csv",
-            root: &root,
-            initial_content: &used_records,
-        };
 
-        let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, true)?;
+        let mut deps = get_deps(mock_opts, all_records)?;
         let result = get_command(&None, &mut deps);
 
         result
@@ -184,35 +147,29 @@ mod tests {
         initialize();
 
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
-        let used_records = vec!["1,git log,2", "2,git branch,0"];
 
-        let root: VfsPath = MemoryFS::new().into();
-        let mut all_file_mgr = MockFileManager {
-            file_name: "all_file.csv",
-            root: &root,
-            initial_content: &all_records,
-        };
-        // = build_file_manager("cmd.csv");
-        let mut used_file_mgr = MockFileManager {
-            file_name: "used_file.csv",
-            root: &root,
-            initial_content: &used_records,
-        };
-
-        all_file_mgr.create_cmd_file()?;
-        used_file_mgr.create_cmd_file()?;
         let mut results = Vec::<Vec<CmdRecord>>::new();
         let uses: usize = 5;
+        let mock_opts = MockOpts {
+            selected_record: Box::new(|opts| {
+                match opts.binary_search(&"git commit -m {}".to_string()) {
+                    Ok(index) => index,
+                    Err(err) => {
+                        log_debug!("{}", format!("Option is not preset: {:?}", opts).as_str());
+                        log_error!("{}", err);
+                        0
+                    }
+                }
+            }),
+        };
+        let mut deps = get_deps(mock_opts, all_records.clone())?;
+
         for _i in 0..uses {
-            let mock_opts = MockOpts {
-                selected_record: Box::new(|opts| {
-                    opts.binary_search(&"git commit -m {}".to_string()).unwrap()
-                }),
-            };
-            let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, false)?;
             let _result = get_command(&None, &mut deps);
 
             results.push(deps.mem.get_used_commands("".to_string()).clone());
+
+            log_debug!("All results: {:?}", &deps.mem.get_commands("".to_string()).clone());
         }
 
         let test_cmd = &results
@@ -221,6 +178,7 @@ mod tests {
             .iter()
             .group_by(|x| x.command.clone());
 
+        log_debug!("Results: {:?}", test_cmd);
         let end_cmd = test_cmd.get("git commit -m git").unwrap();
 
         assert_eq!(end_cmd.len(), 1);
@@ -233,25 +191,12 @@ mod tests {
     fn get_command_test_pattern() -> Result<(), CmdError> {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
-        let used_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
         let mock_opts = MockOpts {
             selected_record: Box::new(|_x| { 0 }),
         };
-        let root: VfsPath = MemoryFS::new().into();
-        let mut all_file_mgr = MockFileManager {
-            file_name: "all_file.csv",
-            root: &root,
-            initial_content: &all_records,
-        };
-        // = build_file_manager("cmd.csv");
-        let mut used_file_mgr = MockFileManager {
-            file_name: "used_file.csv",
-            root: &root,
-            initial_content: &used_records,
-        };
 
-        let mut deps = get_deps(mock_opts, &mut all_file_mgr, &mut used_file_mgr, true)?;
+        let mut deps = get_deps(mock_opts, all_records)?;
         get_command(&None, &mut deps)?;
 
         log_debug!("{:?}", deps.mem.get_commands("".to_string()));

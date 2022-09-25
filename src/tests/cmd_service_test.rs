@@ -5,6 +5,7 @@ mod cmd_service_test {
     use env_logger::Builder;
     use rusqlite::Connection;
     use vfs::{ VfsPath, MemoryFS };
+    use crate::traits::cmd_service::SearchFiltersBuilder;
 
     use crate::{
         services::{
@@ -13,7 +14,7 @@ mod cmd_service_test {
             file_manager::{ FileManagerImpl, build_file_manager },
         },
         tests::{ mocks::file_manager::MockFileManager },
-        traits::{ cmd_service::CmdService, file_manager::FileManager },
+        traits::{ cmd_service::{ CmdService, SearchFilters }, file_manager::FileManager },
         models::cmd_record::{ CmdRecord, CmdRecordIterable },
         error,
         log_info,
@@ -54,7 +55,7 @@ mod cmd_service_test {
             };
             cmd_service.update_command(ran_cmd.clone())?;
 
-            let updated_commands = cmd_service.get_commands(None);
+            let updated_commands = cmd_service.get_commands(SearchFilters::default());
             let cmd_map = updated_commands.iter().group_by(|x| x.command.clone());
 
             let get_updated = cmd_map.get(&test_command);
@@ -80,13 +81,13 @@ mod cmd_service_test {
                 used_times: 3,
             })?;
 
-            let updated_commands = cmd_service.get_commands(None);
+            let updated_commands = cmd_service.get_commands(SearchFilters::default());
 
             log_info!("Updated: {:?}", updated_commands);
         }
 
         let mut cmd_service = build_cmd_csv_service(&mut used_file_mgr, false)?;
-        let updated_commands = cmd_service.get_commands(None);
+        let updated_commands = cmd_service.get_commands(SearchFilters::default());
 
         assert_eq!(updated_commands.len(), used_records.len() + 1);
 
@@ -104,7 +105,7 @@ mod cmd_service_test {
         cmd_service.add_command("git branch".to_string())?;
         cmd_service.add_command("git commit -m {}".to_string())?;
 
-        let commands = cmd_service.get_commands(None);
+        let commands = cmd_service.get_commands(SearchFilters::default());
 
         log_debug!("Commands: {:?}", commands);
 
@@ -124,7 +125,9 @@ mod cmd_service_test {
         cmd_service.add_command("ls -l".to_string())?;
         cmd_service.add_command("git commit -m {}".to_string())?;
 
-        let commands = cmd_service.get_commands(Some("ls".to_string()));
+        let commands = cmd_service.get_commands(
+            SearchFiltersBuilder::default().command("ls".to_string()).build().unwrap()
+        );
 
         log_debug!("Commands: {:?}", commands);
 
@@ -144,7 +147,9 @@ mod cmd_service_test {
         cmd_service.add_command("ls -l".to_string())?;
         cmd_service.add_command("git commit -m {}".to_string())?;
 
-        let mut commands = cmd_service.get_commands(Some("ls".to_string()));
+        let mut commands = cmd_service.get_commands(
+            SearchFiltersBuilder::default().command("ls".to_string()).build().unwrap()
+        );
 
         log_debug!("Commands: {:?}", commands);
 
@@ -157,7 +162,9 @@ mod cmd_service_test {
             }
         }
 
-        let commands2 = cmd_service.get_commands(Some("ls".to_string()));
+        let commands2 = cmd_service.get_commands(
+            SearchFiltersBuilder::default().command("ls".to_string()).build().unwrap()
+        );
 
         log_debug!("Commands (after update): {:?}", commands2);
 
@@ -184,7 +191,12 @@ mod cmd_service_test {
             cmd_service.insert_command(cmd)?;
         }
 
-        let commands = cmd_service.get_commands(Some("git log".to_string()));
+        let commands = cmd_service.get_commands(
+            SearchFiltersBuilder::default()
+                .command("git".to_string())
+                .build()
+                .expect("Could not parse search params")
+        );
 
         log_debug!("Commands: {:?}", commands);
         assert_eq!(commands.len(), 1);
@@ -231,7 +243,7 @@ mod cmd_service_test {
             let _ = &cmd_service.migrate_cvs(saved_file_mgr, used_file_mgr)?;
         }
 
-        let commands = cmd_service.get_commands(None);
+        let commands = cmd_service.get_commands(SearchFilters::default());
 
         assert_eq!(
             commands
@@ -246,7 +258,8 @@ mod cmd_service_test {
         Ok(())
     }
 
-    // #[test]
+    #[ignore]
+    #[test]
     fn migrate_cvs_test_prod() -> Result<(), error::CmdError> {
         initialize();
         let mut cmd_service = CmdServiceSQL::build_cmd_service(None)?;
@@ -261,7 +274,7 @@ mod cmd_service_test {
             let _ = &cmd_service.migrate_cvs(saved_file_mgr, used_file_mgr)?;
         }
 
-        let commands = cmd_service.get_commands(None);
+        let commands = cmd_service.get_commands(SearchFilters::default());
 
         log_debug!("Commands: {:?}", commands);
 

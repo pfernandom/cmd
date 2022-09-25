@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use crate::{
-    traits::{ cmd_service::CmdService, file_manager::FileManager },
+    traits::{ cmd_service::{ CmdService, SearchFilters }, file_manager::FileManager },
     error::{ CmdError, self },
     models::cmd_record::{ CmdRecord },
     log_debug,
@@ -141,33 +141,35 @@ impl CmdService<'_> for CmdServiceSQL {
 
     fn get_commands(
         self: &mut Self,
-        filter: Option<String>
+        filter: SearchFilters
     ) -> Vec<crate::models::cmd_record::CmdRecord> {
-        match filter {
-            Some(command) => {
-                self.connection
-                    .prepare(
-                        format!(
-                            "SELECT id, command, used_times FROM cmd WHERE command LIKE {}",
-                            format!("'%{}%'", command)
-                        ).as_str()
-                    )
-                    .unwrap()
-                    .query_map([], |row| Ok(CmdRecord::from(row.clone())))
-                    .unwrap()
-                    .map(|el| el.unwrap().clone())
-                    .collect()
-            }
-            None => {
-                self.connection
-                    .prepare("SELECT id, command, used_times FROM cmd")
-                    .unwrap()
-                    .query_map([], |row| Ok(CmdRecord::from(row.clone())))
-                    .unwrap()
-                    .map(|el| el.unwrap().clone())
-                    .collect()
-            }
+        let mut sql = Vec::new();
+        sql.push(String::from("SELECT id, command, used_times FROM cmd"));
+
+        if filter.command.is_some() || filter.used == true {
+            sql.push(String::from(" WHERE "));
         }
+        if let Some(name) = &filter.command {
+            let s = format!("command LIKE {}", format!("'%{}%'", name));
+            sql.push(s);
+        }
+
+        if filter.command.is_some() && filter.used == true {
+            sql.push(String::from(" AND "));
+        }
+
+        if filter.used {
+            sql.push(String::from("used_times > 0"));
+        }
+
+        log_debug!("SQL: {}", sql.join(" "));
+        self.connection
+            .prepare(sql.join(" ").as_str())
+            .expect("Could not build the SQL statement")
+            .query_map([], |row| Ok(CmdRecord::from(row.clone())))
+            .expect("Could not map row")
+            .map(|el| el.unwrap().clone())
+            .collect()
     }
 
     fn get_file_name(self: &Self) -> String {
