@@ -1,4 +1,4 @@
-use clap::{ Parser, Subcommand, ValueHint, value_parser };
+use clap::{ Parser, Subcommand, ValueHint };
 use clap_complete::Shell;
 
 // cargo run -- --generate=zsh

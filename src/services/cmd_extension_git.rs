@@ -1,4 +1,4 @@
-use std::{ env, str::{ from_utf8_unchecked, from_utf8 }, ops::Range };
+use std::{ env, str::{ from_utf8 }, ops::Range };
 
 use crate::{
     traits::cmd_extension::CmdExtension,
@@ -58,19 +58,19 @@ fn fill_with_branch(
         Ok(repo) => repo,
         Err(e) => panic!("failed to clone: {}", e),
     };
-    let branches = get_branches(&repo).expect("cannot retrieve branches");
+    let _branches = get_branches(&repo).expect("cannot retrieve branches");
     // let selected_branch = deps.input
     //     .select_option(&branches, Some("Select a branch to checkout".to_string()))
     //     .unwrap();
     // let note = branches.get(selected_branch).unwrap();
     //let final_cmd = cmd.replacen("{}", &note, 1);
-    let mut parsed_cmd = String::from(&cmd);
-    let (final_cmd, count) = fill_placeholders(&cmd, deps, parsed_cmd, &mut cmd_record.clone());
+    let parsed_cmd = String::from(&cmd);
+    let (final_cmd, _count) = fill_placeholders(&cmd, deps, parsed_cmd, &mut cmd_record.clone());
 
     log_debug!("Executing '{}'!", &final_cmd);
     // let result = deps.os.execute_command(&final_cmd);
     let result: Result<bool, CmdError> = Ok(true);
-    let used_commands = deps.controller.get_used_commands(cmd.clone());
+    let _used_commands = deps.controller.get_used_commands(cmd.clone());
     match result {
         Ok(_) => {
             log_info!("Finalized successfully");
@@ -79,7 +79,7 @@ fn fill_with_branch(
             let alias = if final_cmd.eq(&cmd_record.command) { None } else { Some(final_cmd) };
             new_cmd.used_times = cmd_record.used_times + 1;
             let used_command = &mut deps.controller.add_used_command(new_cmd.to_owned(), alias);
-            if let Ok(cmd) = used_command {
+            if let Ok(_cmd) = used_command {
                 return Some(Some(Ok(())));
             }
         }

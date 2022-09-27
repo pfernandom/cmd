@@ -128,7 +128,7 @@ fn return_selection(
             std::process::exit(1);
         }
     };
-    let mut parsed_cmd = String::from(selected_cmd);
+    let parsed_cmd = String::from(selected_cmd);
 
     let selected_record = &mut deps.controller
         .get_used_commands(parsed.clone())

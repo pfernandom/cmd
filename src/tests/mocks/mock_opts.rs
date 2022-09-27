@@ -7,13 +7,13 @@ pub struct MockOpts<'a> {
 
 // type OptionSelect = |&Vec<String>| -> usize;
 
-pub fn RcMut<T>(p: T) -> MutRef<T> {
+pub fn to_rc_mut<T>(p: T) -> MutRef<T> {
     Rc::new(RefCell::new(p))
 }
 
 impl<'a> MockOpts<'a> {
     pub fn new() -> Rc<RefCell<MockOpts<'a>>> {
-        RcMut(MockOpts::default())
+        to_rc_mut(MockOpts::default())
     }
     pub fn capture_options_for_command(self: &mut Self, options: Vec<String>) {
         self.captures.options_for_command = options;
@@ -23,7 +23,7 @@ impl<'a> MockOpts<'a> {
         sr(vec)
     }
     pub fn from(selected_record: impl 'a + Fn(&Vec<String>) -> usize) -> MutRef<MockOpts<'a>> {
-        RcMut(MockOpts {
+        to_rc_mut(MockOpts {
             selected_record: Box::new(selected_record),
             ..MockOpts::default()
         })

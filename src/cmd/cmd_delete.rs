@@ -95,7 +95,7 @@ fn delete_selection(
     deps: &mut Deps,
     options: Vec<String>,
     commands: Vec<CmdRecord>,
-    parsed: String
+    _parsed: String
 ) -> Result<(), CmdError> {
     let selection = deps.input.select_option(&options, None);
 
@@ -114,7 +114,7 @@ fn delete_selection(
             std::process::exit(1);
         }
     };
-    let mut parsed_cmd = String::from(selected_cmd);
+    let _parsed_cmd = String::from(selected_cmd);
 
     let selected_record = commands
         .get(selected_cmd_index)

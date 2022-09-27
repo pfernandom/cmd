@@ -1,7 +1,7 @@
-use std::{ rc::Rc, cell::RefCell, io };
+use std::{ rc::Rc, cell::RefCell };
 
-use clap_complete::{ Shell, Generator, generate, generate_to };
-use cmd::{ cmd_get, cmd_add, cmd_clear, cmd_delete::{ self, delete_command } };
+use clap_complete::{ Generator, generate_to };
+use cmd::{ cmd_get, cmd_add, cmd_clear, cmd_delete::{ delete_command } };
 use env_logger::Builder;
 use log::LevelFilter;
 extern crate derive_builder;
@@ -28,6 +28,7 @@ mod logging;
 mod program;
 mod cmd;
 pub mod services;
+#[cfg(test)]
 mod tests;
 mod cmd_csv;
 mod traits;
@@ -136,7 +137,7 @@ pub(crate) fn app(deps: &mut Deps) {
         Commands::Clear {} => {
             cmd_clear::clear(&deps);
         }
-        Commands::Debug { pattern } => {
+        Commands::Debug { pattern: _ } => {
             let ctrl = &deps.controller;
             ctrl.debug();
         }
