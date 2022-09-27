@@ -1,7 +1,7 @@
 use crate::{ error::CmdError, Deps };
 
 pub fn add_command(pattern: bool, execute: bool, deps: &mut Deps) -> Result<(), CmdError> {
-    let mem = &mut deps.mem;
+    let mem = &mut deps.controller;
     let note = deps.input.get_input(Some("Write your command".into()));
     print!("{}", note);
 

@@ -1,18 +1,25 @@
-use std::{ rc::Rc, cell::RefCell };
+use std::{ rc::Rc, cell::RefCell, io };
 
-use cmd::{ cmd_get, cmd_add, cmd_clear };
+use clap_complete::{ Shell, Generator, generate, generate_to };
+use cmd::{ cmd_get, cmd_add, cmd_clear, cmd_delete::{ self, delete_command } };
 use env_logger::Builder;
 use log::LevelFilter;
 extern crate derive_builder;
 
-use clap::Parser;
+use clap::{ Parser, CommandFactory, Command };
 use services::{
     controller::{ Controller, RefCmdService },
     file_manager::{ build_file_manager, FileManagerImpl },
     os_service::OSServiceImpl,
     cmd_service_sql::CmdServiceSQL,
+    cmd_extension_git::CmdExtensionGit,
 };
-use traits::{ file_manager::FileManager, inputable::Inputable, os_service::OSService };
+use traits::{
+    file_manager::FileManager,
+    inputable::Inputable,
+    os_service::OSService,
+    cmd_extension::CmdExtension,
+};
 
 use crate::services::input::InputManager;
 
@@ -31,7 +38,7 @@ use args::{ Cli, Commands };
 pub struct Deps<'a> {
     pub input: Box<dyn Inputable>,
     pub args: Cli,
-    pub mem: Controller<'a>,
+    pub controller: Controller<'a>,
     pub os: Box<dyn OSService>,
 }
 
@@ -51,8 +58,22 @@ fn create_config<'a>(
     Ok(Controller { all: Rc::clone(&all_cmd_service), used: Rc::clone(&all_cmd_service) })
 }
 
+fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    match generate_to(gen, cmd, cmd.get_name().to_string(), "./") {
+        Ok(msg) => { println!("Autocomplete generated succesfully {:?}", msg) }
+        Err(err) => { println!("Could not generate autocomplete: {}", err.to_string()) }
+    }
+}
 fn main() {
     let args = Cli::parse();
+
+    if let Some(generator) = args.generator {
+        let mut cmd = Cli::command();
+        eprintln!("Generating completion file for {:?}...", generator);
+        print_completions(generator, &mut cmd);
+        return;
+    }
+
     let level = match args.verbose {
         true => LevelFilter::Debug,
         false => LevelFilter::Info,
@@ -70,7 +91,14 @@ fn main() {
             let input: InputManager = InputManager {};
             let os_service = OSServiceImpl {};
 
-            app(&mut (Deps { args, mem, input: Box::new(input), os: Box::new(os_service) }))
+            app(
+                &mut (Deps {
+                    args,
+                    controller: mem,
+                    input: Box::new(input),
+                    os: Box::new(os_service),
+                })
+            )
         }
         Err(err) => {
             log_error!("Error: Could not start the app: {}", err);
@@ -80,6 +108,7 @@ fn main() {
 
 pub(crate) fn app(deps: &mut Deps) {
     let mut args = deps.args.clone();
+
     let command = &mut args.command;
 
     let cmd: Commands = match command {
@@ -107,9 +136,17 @@ pub(crate) fn app(deps: &mut Deps) {
         Commands::Clear {} => {
             cmd_clear::clear(&deps);
         }
-        Commands::Debug {} => {
-            let ctrl = &deps.mem;
+        Commands::Debug { pattern } => {
+            let ctrl = &deps.controller;
             ctrl.debug();
+        }
+        Commands::Delete {} => {
+            match delete_command(deps) {
+                Ok(_) => { log_info!("Completed successfully.") }
+                Err(err) => {
+                    log_error!("Error: {}", err.to_string());
+                }
+            }
         }
     }
 }

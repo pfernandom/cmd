@@ -20,4 +20,5 @@ pub trait CmdService<'a> {
     fn get_file_name(self: &Self) -> String;
     fn clear_commands(self: &Self) -> Result<(), CmdError>;
     fn debug(self: &Self);
+    fn delete_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError>;
 }

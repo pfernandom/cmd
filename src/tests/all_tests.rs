@@ -2,8 +2,9 @@
 mod tests {
     use env_logger::Builder;
     use rusqlite::Connection;
+    use std::borrow::Borrow;
     use std::cell::RefCell;
-    use std::collections::{ HashMap };
+    use std::collections::{ HashMap, HashSet };
     use std::io::{ BufWriter, Cursor, Write, Read };
     use std::rc::Rc;
     use std::sync::Once;
@@ -19,6 +20,7 @@ mod tests {
     use crate::services::os_service::MockOSServiceImpl;
     use crate::traits::cmd_service::CmdService;
     use crate::traits::inputable::{ MockInputable };
+    use crate::tests::mocks::mock_opts::*;
     use crate::{ FileManager, Deps, log_info, log_debug, log_error };
 
     static INIT: Once = Once::new();
@@ -29,10 +31,6 @@ mod tests {
         });
     }
 
-    struct MockOpts<'a> {
-        selected_record: Box<dyn (FnMut(&Vec<String>) -> usize) + 'a>,
-    }
-
     fn get_cursor(records: &mut Vec<&str>) -> Cursor<Vec<u8>> {
         let v = records.join("\n");
         let content = v.as_bytes();
@@ -41,7 +39,22 @@ mod tests {
     }
 
     fn get_deps<'a>(
-        mut mock_opts: MockOpts<'static>,
+        mock_opts: MutRef<MockOpts<'static>>,
+        all: Vec<&str>
+    ) -> Result<Deps<'a>, CmdError> {
+        let args: Cli = Cli {
+            get_command: Some("".to_string()),
+            command: Some(Commands::Add { pattern: false, execute: false }),
+            verbose: true,
+            dry_run: false,
+            generator: None,
+        };
+        get_deps_2(mock_opts, args, all)
+    }
+
+    fn get_deps_2<'a>(
+        mock_opts: MutRef<MockOpts<'static>>,
+        args: Cli,
         all: Vec<&str>
     ) -> Result<Deps<'a>, CmdError> {
         //build_file_manager("cmd_used.csv");
@@ -62,28 +75,35 @@ mod tests {
         // let all_cmd_service = build_cmd_csv_service(all_file_mgr, false)?;
         // let used_cmd_service = build_cmd_csv_service(used_file_mgr, false)?;
 
-        let mem = Controller {
+        let controller = Controller {
             all: Rc::clone(&all_cmd_service),
             used: Rc::clone(&all_cmd_service),
-        };
-
-        let args: Cli = Cli {
-            get_command: Some("".to_string()),
-            command: Some(Commands::Add { pattern: false, execute: false }),
-            verbose: true,
         };
 
         let mut mock_input = MockInputable::new();
         mock_input.expect_get_input().returning(|_| "git".to_string());
 
         mock_input.expect_select_option().returning_st(move |opts, _maybe_prompt| {
-            log_debug!("Select an option:");
+            let prompt = match _maybe_prompt {
+                Some(prompt) => prompt,
+                None => String::from("Select an option:"),
+            };
+            log_debug!("{}", prompt);
+
             for o in opts {
                 log_debug!("- {}", o);
             }
-            let select_record = &mut mock_opts.selected_record;
 
-            let result = select_record(opts);
+            // let mo: &RefCell<MockOpts> = mock_opts.borrow();
+            // let mo: &MockOpts = &mut mo.borrow();
+
+            let x = mock_opts.as_ref();
+
+            let result = x.borrow_mut().get_selected_record(opts);
+            x.borrow_mut().capture_options_for_command(opts.clone());
+
+            // let _ = mock_opts.capture_options_for_command(*opts);
+
             Some(std::cmp::min(result, opts.len() - 1))
         });
 
@@ -93,7 +113,7 @@ mod tests {
             Ok(true)
         });
 
-        Ok(Deps { args, mem, input: Box::new(mock_input), os: Box::new(mock_os) })
+        Ok(Deps { args, controller, input: Box::new(mock_input), os: Box::new(mock_os) })
     }
 
     #[test]
@@ -101,9 +121,7 @@ mod tests {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
-        let mock_opts = MockOpts {
-            selected_record: Box::new(|_opts| { 0 }),
-        };
+        let mut mock_opts = MockOpts::new();
 
         let mut deps = get_deps(mock_opts, all_records)?;
         crate::app(&mut deps);
@@ -116,9 +134,7 @@ mod tests {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
-        let mock_opts = MockOpts {
-            selected_record: Box::new(|_opts| { 0 }),
-        };
+        let mut mock_opts = MockOpts::new();
 
         let mut deps = get_deps(mock_opts, all_records)?;
         let result = add_command(false, true, &mut deps);
@@ -131,12 +147,48 @@ mod tests {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
-        let mock_opts = MockOpts {
-            selected_record: Box::new(|_opts| { 0 }),
+        let mock_opts = MockOpts::new();
+
+        let mut deps = get_deps(Rc::clone(&mock_opts), all_records)?;
+        let result = get_command(&None, &mut deps);
+
+        let captures = &mock_opts.as_ref().take().captures;
+
+        let captures = &captures.options_for_command;
+
+        log_debug!("Captures: {:?}", captures);
+
+        result
+    }
+
+    #[test]
+    fn get_command_test_2() -> Result<(), CmdError> {
+        initialize();
+        let all_records = vec!["1,git log,0", "2,git branch,2", "3,git commit -m {},0"];
+
+        let mock_opts = MockOpts::from(|opts| {
+            match opts.len() {
+                2 => 1,
+                _ => 0,
+            }
+        });
+
+        let args = Cli {
+            command: None,
+            get_command: None,
+            verbose: true,
+            dry_run: false,
+            generator: None,
         };
 
-        let mut deps = get_deps(mock_opts, all_records)?;
+        let mut deps = get_deps_2(Rc::clone(&mock_opts), args, all_records)?;
         let result = get_command(&None, &mut deps);
+
+        let captures = &mock_opts.as_ref().take().captures;
+
+        let captures = &captures.options_for_command;
+
+        log_debug!("Captures: {:?}", captures);
 
         result
     }
@@ -149,26 +201,26 @@ mod tests {
 
         let mut results = Vec::<Vec<CmdRecord>>::new();
         let uses: usize = 5;
-        let mock_opts = MockOpts {
-            selected_record: Box::new(|opts| {
-                match opts.binary_search(&"git commit -m {}".to_string()) {
-                    Ok(index) => index,
-                    Err(err) => {
-                        log_debug!("{}", format!("Option is not preset: {:?}", opts).as_str());
-                        log_error!("{}", err);
-                        0
-                    }
+
+        let mock_opts = MockOpts::from(|opts: &Vec<String>| {
+            match opts.binary_search(&"git commit -m {}".to_string()) {
+                Ok(index) => index,
+                Err(err) => {
+                    log_debug!("{}", format!("Option is not preset: {:?}", opts).as_str());
+                    log_error!("{}", err);
+                    0
                 }
-            }),
-        };
-        let mut deps = get_deps(mock_opts, all_records.clone())?;
+            }
+        });
+
+        let mut deps = get_deps(Rc::clone(&mock_opts), all_records.clone())?;
 
         for _i in 0..uses {
             let _result = get_command(&None, &mut deps);
 
-            results.push(deps.mem.get_used_commands("".to_string()).clone());
+            results.push(deps.controller.get_used_commands("".to_string()).clone());
 
-            log_debug!("All results: {:?}", &deps.mem.get_commands("".to_string()).clone());
+            log_debug!("All results: {:?}", &deps.controller.get_commands("".to_string()).clone());
         }
 
         let test_cmd = &results
@@ -183,6 +235,89 @@ mod tests {
         assert_eq!(end_cmd.len(), 1);
         assert_eq!(end_cmd.iter().sum_count(), uses);
 
+        let mocks = mock_opts.take();
+
+        let mut captures = mocks.captures.options_for_command;
+        log_debug!("Captures: {:?}", captures);
+        let mut h = captures
+            .iter()
+            .map(|x| x.clone())
+            .collect::<HashSet<String>>()
+            .iter()
+            .map(|x| x.clone())
+            .collect::<Vec<String>>();
+
+        captures.sort();
+        h.sort();
+        assert_eq!(captures, h);
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_command_test_many_times_2() -> Result<(), CmdError> {
+        initialize();
+
+        let all_records = vec!["1,git log,2", "2,git branch,0", "3,git commit -m {},0"];
+
+        let mut results = Vec::<Vec<CmdRecord>>::new();
+        let uses: usize = 5;
+
+        let mock_opts = MockOpts::from(|opts: &Vec<String>| {
+            match opts.len() {
+                2 => 1,
+                _ =>
+                    match opts.binary_search(&"git commit -m {}".to_string()) {
+                        Ok(index) => index,
+                        Err(err) => {
+                            log_debug!("{}", format!("Option is not preset: {:?}", opts).as_str());
+                            log_error!("{}", err);
+                            0
+                        }
+                    }
+            }
+        });
+
+        let args = Cli::default();
+
+        let mut deps = get_deps_2(Rc::clone(&mock_opts), args, all_records.clone())?;
+
+        for _i in 0..uses {
+            let _result = get_command(&None, &mut deps);
+
+            results.push(deps.controller.get_used_commands("".to_string()).clone());
+
+            log_debug!("All results: {:?}", &deps.controller.get_commands("".to_string()).clone());
+        }
+
+        let test_cmd = &results
+            .last()
+            .unwrap()
+            .iter()
+            .group_by(|x| x.command.clone());
+
+        log_debug!("Results: {:?}", test_cmd);
+        let end_cmd = test_cmd.get("git commit -m git").unwrap();
+
+        assert_eq!(end_cmd.len(), 1);
+        assert_eq!(end_cmd.iter().sum_count(), uses);
+
+        let mocks = mock_opts.take();
+
+        let mut captures = mocks.captures.options_for_command;
+        log_debug!("Captures: {:?}", captures);
+        let mut h = captures
+            .iter()
+            .map(|x| x.clone())
+            .collect::<HashSet<String>>()
+            .iter()
+            .map(|x| x.clone())
+            .collect::<Vec<String>>();
+
+        captures.sort();
+        h.sort();
+        assert_eq!(captures, h);
+
         Ok(())
     }
 
@@ -191,15 +326,13 @@ mod tests {
         initialize();
         let all_records = vec!["1,git log,0", "2,git branch,0", "3,git commit -m {},0"];
 
-        let mock_opts = MockOpts {
-            selected_record: Box::new(|_x| { 0 }),
-        };
+        let mut mock_opts = MockOpts::new();
 
         let mut deps = get_deps(mock_opts, all_records)?;
         get_command(&None, &mut deps)?;
 
-        log_debug!("{:?}", deps.mem.get_commands("".to_string()));
-        log_debug!("{:?}", deps.mem.get_used_commands("".to_string()));
+        log_debug!("{:?}", deps.controller.get_commands("".to_string()));
+        log_debug!("{:?}", deps.controller.get_used_commands("".to_string()));
 
         Ok(())
     }

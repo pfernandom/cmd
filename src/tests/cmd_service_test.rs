@@ -258,7 +258,7 @@ mod cmd_service_test {
         Ok(())
     }
 
-    #[ignore]
+    // #[ignore]
     #[test]
     fn migrate_cvs_test_prod() -> Result<(), error::CmdError> {
         initialize();

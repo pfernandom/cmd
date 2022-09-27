@@ -13,11 +13,12 @@ pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdE
         );
 
         if let Some(i) = default_selection {
-            if i == 0 {
-                return get_last_used("".to_string(), deps);
-            } else {
-                return get_matches("".to_string(), deps);
-            }
+            let parsed = "".to_string();
+            let (commands, options) = match i {
+                0 => get_last_used(parsed.clone(), deps)?,
+                _ => get_matches(parsed.clone(), deps)?,
+            };
+            return return_selection(deps, options, commands, parsed);
         }
     }
 
@@ -29,10 +30,11 @@ pub fn get_command(pattern: &Option<String>, deps: &mut Deps) -> Result<(), CmdE
         }
     };
 
-    return get_matches(parsed, deps);
+    let (commands, options) = get_matches(parsed.clone(), deps)?;
+    return_selection(deps, options, commands, parsed)
 }
 
-fn get_commands_list(
+pub fn get_commands_list(
     commands: &Vec<CmdRecord>,
     filter: impl FnMut(&&CmdRecord) -> bool
 ) -> Vec<models::cmd_record::CmdRecord> {
@@ -47,8 +49,8 @@ fn get_commands_list(
     return result;
 }
 
-fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
-    let mem: &mut Controller = &mut deps.mem;
+fn get_matches(parsed: String, deps: &mut Deps) -> Result<(Vec<CmdRecord>, Vec<String>), CmdError> {
+    let mem: &mut Controller = &mut deps.controller;
 
     let mut commands = mem.get_used_commands(parsed.clone()).clone();
 
@@ -74,9 +76,41 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
 
     if options.is_empty() {
         log::warn!("No command matched the pattern");
-        return Ok(());
+        std::process::exit(1);
     }
 
+    return Ok((commands, options));
+}
+
+fn get_last_used(
+    parsed: String,
+    deps: &mut Deps
+) -> Result<(Vec<CmdRecord>, Vec<String>), CmdError> {
+    let mem: &mut Controller = &mut deps.controller;
+
+    let commands = get_commands_list(&mem.get_used_commands(parsed.clone()), |_x| true);
+
+    println!("Used commands: {:?}", commands);
+
+    let options = commands
+        .iter()
+        .map(|cm| cm.command.clone())
+        .collect::<Vec<_>>();
+
+    if options.is_empty() {
+        log::warn!("No command matched the pattern");
+        std::process::exit(1);
+    }
+
+    return Ok((commands, options));
+}
+
+fn return_selection(
+    deps: &mut Deps,
+    options: Vec<String>,
+    commands: Vec<CmdRecord>,
+    parsed: String
+) -> Result<(), CmdError> {
     let selection = deps.input.select_option(&options, None);
 
     let selected_cmd_index = match selection {
@@ -96,33 +130,24 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     };
     let mut parsed_cmd = String::from(selected_cmd);
 
-    let selected_record = &mem
+    let selected_record = &mut deps.controller
         .get_used_commands(parsed.clone())
         .get(selected_cmd_index)
         .unwrap_or_else(|| commands.get(selected_cmd_index).unwrap())
         .to_owned();
 
-    let (final_cmd, final_count) = match selected_cmd.contains("{}") {
-        true => {
-            log_debug!("Fill placeholders");
+    let git = CmdExtensionGit {};
 
-            let rest = selected_cmd.matches("{}");
-            let count = rest.count();
+    if git.handle_if_match(&Some(selected_record.clone()), deps).is_some() {
+        return Ok(());
+    }
 
-            println!("Fill {} params...", count);
-
-            for i in 0..count {
-                let note = deps.input.get_input(Some(format!("Set param No.{}:", i + 1)));
-                parsed_cmd = parsed_cmd.replacen("{}", &note, 1);
-                // print!("{esc}c", esc = 27 as char);
-                // print!("\r");
-                // print!("{}", 8u8 as char);
-            }
-
-            (parsed_cmd, 0)
-        }
-        false => (parsed_cmd, selected_record.used_times),
-    };
+    let (final_cmd, final_count) = fill_placeholders(
+        selected_cmd,
+        deps,
+        parsed_cmd,
+        selected_record
+    );
 
     log_debug!("Executing '{}'!", &final_cmd);
 
@@ -135,9 +160,10 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
             // new_cmd.update_command(&final_cmd);
             let alias = if final_cmd.eq(&selected_record.command) { None } else { Some(final_cmd) };
             new_cmd.used_times = final_count;
-            match mem.add_used_command(new_cmd.to_owned(), alias) {
+            let used_command = &mut deps.controller.add_used_command(new_cmd.to_owned(), alias);
+            match used_command {
                 Ok(_) => Ok(()),
-                Err(err) => Err(err.into()),
+                Err(err) => Err(err.to_owned().into()),
             }
         }
         Err(err) => {
@@ -147,42 +173,12 @@ fn get_matches(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
     }
 }
 
-fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
-    let mem: &mut Controller = &mut deps.mem;
-
-    let commands = get_commands_list(&mem.get_used_commands(parsed.clone()), |_x| true);
-
-    println!("Used commands: {:?}", commands);
-
-    let options = commands
-        .iter()
-        .map(|cm| cm.command.clone())
-        .collect::<Vec<_>>();
-
-    if options.is_empty() {
-        log::warn!("No command matched the pattern");
-        return Ok(());
-    }
-
-    let selection = deps.input.select_option(&options, None);
-
-    let selected_cmd_index = match selection {
-        Some(ind) => { ind }
-        None => {
-            log_info!("No command was selected. Exiting...");
-            std::process::exit(1);
-        }
-    };
-
-    let selected_cmd = options.get(selected_cmd_index).unwrap();
-    let mut parsed_cmd = String::from(selected_cmd);
-
-    let selected_record = &mem
-        .get_used_commands(parsed.clone())
-        .get(selected_cmd_index)
-        .unwrap_or_else(|| commands.get(selected_cmd_index).unwrap())
-        .to_owned();
-
+pub fn fill_placeholders(
+    selected_cmd: &String,
+    deps: &mut Deps,
+    mut parsed_cmd: String,
+    selected_record: &mut CmdRecord
+) -> (String, usize) {
     let (final_cmd, final_count) = match selected_cmd.contains("{}") {
         true => {
             log_debug!("Fill placeholders");
@@ -204,26 +200,5 @@ fn get_last_used(parsed: String, deps: &mut Deps) -> Result<(), CmdError> {
         }
         false => (parsed_cmd, selected_record.used_times),
     };
-
-    log_debug!("Executing '{}'!", &final_cmd);
-
-    let result = deps.os.execute_command(&final_cmd);
-
-    match result {
-        Ok(_) => {
-            log_info!("Finalized successfully");
-            let mut new_cmd = selected_record.to_owned().clone();
-            // new_cmd.update_command(&final_cmd);
-            let alias = if final_cmd.eq(&selected_record.command) { None } else { Some(final_cmd) };
-            new_cmd.used_times = final_count;
-            match mem.add_used_command(new_cmd.to_owned(), alias) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(err.into()),
-            }
-        }
-        Err(err) => {
-            log_info!("Finalized with an error: {:?}", err);
-            Err(err.into())
-        }
-    }
+    (final_cmd, final_count)
 }

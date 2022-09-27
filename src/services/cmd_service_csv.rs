@@ -167,4 +167,8 @@ impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Writ
     fn debug(self: &Self) {
         log_info!("No debug info")
     }
+
+    fn delete_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError> {
+        todo!()
+    }
 }

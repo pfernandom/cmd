@@ -68,6 +68,10 @@ impl<'a> Controller<'a> {
         self.used.borrow().clear_commands().expect("Cloud not delete cmd_used.csv");
     }
 
+    pub fn delete_record(self: &mut Self, cmd: CmdRecord) {
+        self.all.borrow_mut().delete_command(cmd).expect("Could not delete record");
+    }
+
     pub fn debug(self: &Self) {
         self.all.borrow().debug();
     }

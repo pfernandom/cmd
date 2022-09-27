@@ -7,6 +7,7 @@ pub enum CmdError {
     #[error("The command already exists")] DuplicateCmdError,
     #[error("CSV error")] CSVError(String),
     #[error("SQL error")] SQLError(String),
+    #[error("Git error")] GitError(String),
     #[error("Failed serializing/deserializing record")] CSVSerdeError(String),
 }
 
@@ -35,5 +36,11 @@ impl std::convert::From<csv::Error> for CmdError {
 impl std::convert::From<rusqlite::Error> for CmdError {
     fn from(err: rusqlite::Error) -> Self {
         CmdError::SQLError(err.to_string())
+    }
+}
+
+impl std::convert::From<git2::Error> for CmdError {
+    fn from(err: git2::Error) -> Self {
+        CmdError::GitError(err.to_string())
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rusqlite::Connection;
+use rusqlite::{ Connection, params };
 
 use crate::{
     traits::{ cmd_service::{ CmdService, SearchFilters }, file_manager::FileManager },
@@ -22,7 +22,7 @@ impl CmdServiceSQL {
             None => {
                 let mut home = home::home_dir().expect("Could not find home dir");
                 home.push(".cmd");
-                Connection::open(home.join("csvdb"))?
+                Connection::open(home.join("cmdb"))?
             }
         };
 
@@ -211,5 +211,11 @@ impl CmdService<'_> for CmdServiceSQL {
         for data in &vec {
             log_info!("- {}", data);
         }
+    }
+
+    fn delete_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError> {
+        self.connection.execute("DELETE FROM cmd where id = ?1", params![&command.id])?;
+
+        Ok(())
     }
 }
