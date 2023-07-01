@@ -10,7 +10,7 @@ pub struct SearchFilters {
     pub used: bool,
 }
 
-pub trait CmdService<'a> {
+pub trait CmdService {
     fn insert_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError>;
     fn add_command(self: &mut Self, command: String) -> Result<(), CmdError>;
     fn update_command(self: &mut Self, command: CmdRecord) -> Result<(), CmdError>;

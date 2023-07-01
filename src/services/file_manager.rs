@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::path::Path;
 
 use std::io::Error;
 use std::path::PathBuf;
@@ -15,6 +16,33 @@ pub struct FileManagerImpl {
     pub file_name: String,
     path: String,
     home: PathBuf,
+}
+
+
+pub struct FileManagerBuilder {
+    file_name: String,
+    path: String,
+    home: PathBuf,
+}
+
+impl FileManagerBuilder {
+    pub fn new(name: String) -> Self {
+        let mut home = home::home_dir().expect("Could not find home dir");
+        home.push(".cmd");
+        Self{
+            file_name: name.clone(),
+            path: home.join(name).to_str().expect("could not convert path to string").to_string(),
+            home: home ,
+        }
+    }
+    pub fn on_dir(mut self, dir: String) -> Self {
+        self.home =  Path::new(dir.as_str()).to_path_buf();
+        self
+    }
+
+    pub fn build(self) -> impl FileManager {
+        FileManagerImpl{file_name:self.file_name, path:self.path, home:self.home}
+    }
 }
 
 pub trait Dependable: traits::file_manager::FileManager {}
@@ -41,6 +69,10 @@ impl FileManager for FileManagerImpl {
 
     type R = File;
     fn create_cmd_file(self: &Self) -> Result<(), String> {
+        let mut dir_builder = std::fs::DirBuilder::new();
+        dir_builder.recursive(true).create(&self.home).expect("Could not create config folder");
+
+
         let t = self.home.join(&self.file_name);
         let commands_path = t.to_str().expect("could not convert path to string");
         log_debug!("Creating file: {}", &commands_path);
@@ -83,5 +115,27 @@ impl FileManager for FileManagerImpl {
 
     fn get_file_name(self: &Self) -> String {
         self.file_name.clone()
+    }
+
+    fn get_home_dir(&self) -> &PathBuf {
+        return &self.home;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{services::file_manager::FileManagerBuilder, traits::file_manager::FileManager};
+
+
+    #[test]
+    fn test_create_file() {
+        let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
+
+        let file_manager = FileManagerBuilder::new("test.csv".to_string()).on_dir("./tmp".to_string()).build();
+        assert_eq!(file_manager.get_home_dir().to_str().unwrap(), "./tmp");
+
+        let result = file_manager.create_cmd_file();
+        assert!(result.is_ok());
+
     }
 }

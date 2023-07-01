@@ -1,4 +1,4 @@
-use std::{ io::{ Error, Read, Write } };
+use std::{ io::{ Error, Read, Write }, path::PathBuf };
 
 use csv::{ Reader, Writer };
 
@@ -16,4 +16,6 @@ pub trait FileManager: std::fmt::Debug {
     fn get_cmd_reader(self: &Self) -> Result<Reader<Self::R>, String>;
 
     fn clear_files(self: &Self) -> Result<(), Error>;
+
+    fn get_home_dir(&self) -> &PathBuf;
 }

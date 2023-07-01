@@ -50,6 +50,10 @@ impl<'a> FileManager for MockFileManager<'a> {
     fn clear_files(self: &Self) -> Result<(), std::io::Error> {
         Ok(())
     }
+
+    fn get_home_dir(&self) -> &std::path::PathBuf {
+        todo!()
+    }
 }
 
 impl Drop for MockFileManager<'_> {

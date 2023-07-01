@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, borrow::Borrow};
 
 use rusqlite::{ Connection, params };
 
@@ -11,11 +11,21 @@ use crate::{
     services::cmd_service_csv::build_cmd_csv_service,
 };
 
+
 pub struct CmdServiceSQL {
-    connection: Connection,
+    connection: Rc<Connection>,
+}
+
+impl Clone for CmdServiceSQL{
+    fn clone(&self) -> Self {
+        Self {
+            connection: Rc::clone(self.connection.borrow())
+        }
+    }
 }
 
 impl CmdServiceSQL {
+    
     pub fn build_cmd_service(cntn: Option<Connection>) -> Result<CmdServiceSQL, CmdError> {
         let connection = match cntn {
             Some(cn) => { cn }
@@ -41,7 +51,7 @@ impl CmdServiceSQL {
             []
         )?;
 
-        Ok(CmdServiceSQL { connection: connection })
+        Ok(CmdServiceSQL { connection: Rc::new(connection) })
     }
 
     pub fn migrate_cvs(
@@ -93,7 +103,7 @@ impl CmdServiceSQL {
     }
 }
 
-impl CmdService<'_> for CmdServiceSQL {
+impl CmdService for CmdServiceSQL {
     fn add_command(self: &mut Self, command: String) -> Result<(), error::CmdError> {
         self.connection.execute("INSERT INTO cmd (command, used_times) VALUES (?1, ?2)", (
             &command,

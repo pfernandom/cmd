@@ -62,7 +62,7 @@ impl<'a, T, V> CmdServiceCSV<'a, T, V> where T: Read, V: Write {
 }
 
 #[allow(warnings)]
-impl<'a, T, V> CmdService<'a> for CmdServiceCSV<'a, T, V> where T: Read, V: Write {
+impl<'a, T, V> CmdService for CmdServiceCSV<'a, T, V> where T: Read, V: Write {
     fn add_command(self: &mut Self, command: String) -> Result<(), CmdError> {
         let id = self.get_id();
         let record = CmdRecord { id: id, command: String::from(&command), used_times: 1 };

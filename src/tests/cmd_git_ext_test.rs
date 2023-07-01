@@ -1,13 +1,12 @@
-use env_logger::Builder;
 use rusqlite::Connection;
-use std::cell::RefCell;
 
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Once;
 use crate::args::{ Cli, Commands };
 
-use crate::cmd::cmd_get::get_command;
 
+
+use crate::cmd::cmd_get::GetHandler;
 use crate::error::CmdError;
 use crate::services::cmd_service_sql::CmdServiceSQL;
 use crate::services::controller::Controller;
@@ -19,18 +18,13 @@ use crate::{ Deps, log_info, log_debug };
 
 use super::mocks::mock_opts::{ MutRef, MockOpts };
 
-static INIT: Once = Once::new();
-
 pub fn initialize() {
-    INIT.call_once(|| {
-        Builder::new().filter_level(log::LevelFilter::Debug).init();
-    });
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
 }
-
 fn get_deps<'a>(
     mock_opts: MutRef<MockOpts<'static>>,
     all: Vec<&str>
-) -> Result<Deps<'a>, CmdError> {
+) -> Result<Deps, CmdError> {
     let args: Cli = Cli {
         get_command: Some("".to_string()),
         command: Some(Commands::Add { pattern: false, execute: false }),
@@ -45,7 +39,7 @@ fn get_deps_2<'a>(
     mock_opts: MutRef<MockOpts<'static>>,
     args: Cli,
     all: Vec<&str>
-) -> Result<Deps<'a>, CmdError> {
+) -> Result<Deps, CmdError> {
     //build_file_manager("cmd_used.csv");
 
     let mut cmd_service_sql = CmdServiceSQL::build_cmd_service(
@@ -57,14 +51,14 @@ fn get_deps_2<'a>(
         cmd_service_sql.add_command(cmd.split(",").nth(1).unwrap().to_string())?;
     }
 
-    let all_cmd_service: Rc<RefCell<dyn CmdService<'_>>> = Rc::new(RefCell::new(cmd_service_sql));
+    let all_cmd_service= cmd_service_sql;
 
     // let all_cmd_service = build_cmd_csv_service(all_file_mgr, false)?;
     // let used_cmd_service = build_cmd_csv_service(used_file_mgr, false)?;
 
-    let controller = Controller {
-        all: Rc::clone(&all_cmd_service),
-        used: Rc::clone(&all_cmd_service),
+    let controller = Controller::<CmdServiceSQL> {
+        all: all_cmd_service.clone(),
+        used: all_cmd_service,
     };
 
     let mut mock_input = MockInputable::new();
@@ -100,7 +94,7 @@ fn get_deps_2<'a>(
         Ok(true)
     });
 
-    Ok(Deps { args, controller, input: Box::new(mock_input), os: Box::new(mock_os) })
+    Ok(Deps { args, controller, input: Rc::new(mock_input), os: Rc::new(mock_os) })
 }
 
 #[test]
@@ -114,8 +108,9 @@ fn test_git_ext() -> Result<(), CmdError> {
 
     let mock_opts = MockOpts::from(|_opts| { 1 });
 
-    let mut deps = get_deps(Rc::clone(&mock_opts), all_records)?;
-    let result = get_command(&None, &mut deps);
+    let deps = get_deps(Rc::clone(&mock_opts), all_records)?;
+    let mut get_handler = GetHandler::new(Rc::new(RefCell::new(deps)));
+    let result = get_handler.get_command(&None);
 
     let captures = &mock_opts.as_ref().take().captures;
 
@@ -137,8 +132,9 @@ fn test_git_ext_2() -> Result<(), CmdError> {
 
     let mock_opts = MockOpts::from(|_opts| { 2 });
 
-    let mut deps = get_deps(Rc::clone(&mock_opts), all_records)?;
-    let result = get_command(&None, &mut deps);
+    let deps = get_deps(Rc::clone(&mock_opts), all_records)?;
+    let mut get_handler = GetHandler::new(Rc::new(RefCell::new(deps)));
+    let result = get_handler.get_command(&None);
 
     let captures = &mock_opts.as_ref().take().captures;
 

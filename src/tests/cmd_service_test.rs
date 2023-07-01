@@ -1,6 +1,3 @@
-use std::{ sync::Once };
-
-use env_logger::Builder;
 use rusqlite::Connection;
 use vfs::{ VfsPath, MemoryFS };
 use crate::traits::cmd_service::SearchFiltersBuilder;
@@ -19,12 +16,8 @@ use crate::{
     log_debug,
 };
 
-static INIT: Once = Once::new();
-
 pub fn initialize() {
-    INIT.call_once(|| {
-        Builder::new().filter_level(log::LevelFilter::Debug).init();
-    });
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
 }
 
 #[test]

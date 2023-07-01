@@ -1,24 +1,26 @@
-use std::{ rc::Rc, cell::RefCell };
+use std::{cell::RefCell, rc::Rc};
 
 use clap_complete::{ Generator, generate_to };
-use cmd::{ cmd_get, cmd_add, cmd_clear, cmd_delete::{ delete_command } };
+use cmd::{cmd_get::GetHandler, cmd_add::AddHandler, cmd_clear::ClearHandler, cmd_delete::DeleteHandler};
 use env_logger::Builder;
 use log::LevelFilter;
 extern crate derive_builder;
+#[macro_use]
+extern crate lazy_static;
 
 use clap::{ Parser, CommandFactory, Command };
 use services::{
-    controller::{ Controller, RefCmdService },
-    file_manager::{ build_file_manager, FileManagerImpl },
+    controller::{ Controller },
+    file_manager::{ FileManagerBuilder },
     os_service::OSServiceImpl,
     cmd_service_sql::CmdServiceSQL,
-    cmd_extension_git::CmdExtensionGit,
+    // cmd_extension_git::CmdExtensionGit,
 };
 use traits::{
     file_manager::FileManager,
     inputable::Inputable,
     os_service::OSService,
-    cmd_extension::CmdExtension,
+    // cmd_extension::CmdExtension,
 };
 
 use crate::services::input::InputManager;
@@ -36,28 +38,36 @@ mod error;
 mod models;
 use args::{ Cli, Commands };
 
-pub struct Deps<'a> {
-    pub input: Box<dyn Inputable>,
+pub struct Deps {
+    pub input: Rc<dyn Inputable>,
     pub args: Cli,
-    pub controller: Controller<'a>,
-    pub os: Box<dyn OSService>,
+    pub controller: Controller<CmdServiceSQL>,
+    pub os: Rc<dyn OSService>,
 }
 
-fn create_config<'a>(
-    all_file_mgr: &'a mut FileManagerImpl,
-    used_file_mgr: &'a mut FileManagerImpl
-) -> Result<Controller<'a>, String> {
-    all_file_mgr.create_cmd_file()?;
-    used_file_mgr.create_cmd_file()?;
-    // let all_cmd_service = build_cmd_csv_service(all_file_mgr)?;
-    // let used_cmd_service = build_cmd_csv_service(used_file_mgr)?;
+impl <'a> Deps {
+    fn new(args: Cli) -> Self {
+        let input: InputManager = InputManager {};
+        let os_service = OSServiceImpl {};
 
-    let all_cmd_service: RefCmdService<'_> = Rc::new(
-        RefCell::new(CmdServiceSQL::build_cmd_service(None).unwrap())
-    );
+        let all_file_mgr = FileManagerBuilder::new("cmd.csv".to_string()).build();
+        let used_file_mgr = FileManagerBuilder::new("cmd_used.csv".to_string()).build();
 
-    Ok(Controller { all: Rc::clone(&all_cmd_service), used: Rc::clone(&all_cmd_service) })
+        all_file_mgr.create_cmd_file().expect("Cannot create config file");
+        used_file_mgr.create_cmd_file().expect("Cannot create config file");
+
+        let all_cmd_service = CmdServiceSQL::build_cmd_service(None).unwrap();
+
+
+        Self {
+            args,
+            controller: Controller { all: all_cmd_service.clone(), used: all_cmd_service },
+            input: Rc::new(input),
+            os: Rc::new(os_service),
+        }
+    }
 }
+
 
 fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
     match generate_to(gen, cmd, cmd.get_name().to_string(), "./") {
@@ -65,6 +75,7 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
         Err(err) => { println!("Could not generate autocomplete: {}", err.to_string()) }
     }
 }
+
 fn main() {
     let args = Cli::parse();
 
@@ -82,32 +93,10 @@ fn main() {
 
     Builder::new().filter_level(level).init();
 
-    let mut all_file_mgr = build_file_manager("cmd.csv");
-    let mut used_file_mgr: FileManagerImpl = build_file_manager("cmd_used.csv");
-
-    let maybe_mem = create_config(&mut all_file_mgr, &mut used_file_mgr);
-
-    match maybe_mem {
-        Ok(mem) => {
-            let input: InputManager = InputManager {};
-            let os_service = OSServiceImpl {};
-
-            app(
-                &mut (Deps {
-                    args,
-                    controller: mem,
-                    input: Box::new(input),
-                    os: Box::new(os_service),
-                })
-            )
-        }
-        Err(err) => {
-            log_error!("Error: Could not start the app: {}", err);
-        }
-    }
+    app(Deps::new(args))
 }
 
-pub(crate) fn app(deps: &mut Deps) {
+pub(crate) fn app(deps: Deps) {
     let mut args = deps.args.clone();
 
     let command = &mut args.command;
@@ -117,9 +106,16 @@ pub(crate) fn app(deps: &mut Deps) {
         None => Commands::Get { pattern: args.get_command },
     };
 
+    let deps_ref = Rc::new(RefCell::new(deps));
+
+    let mut get_handler = GetHandler::new(Rc::clone(&deps_ref));
+    let mut add_handler = AddHandler::new(Rc::clone(&deps_ref));
+    let clear_handler = ClearHandler::new(Rc::clone(&deps_ref));
+    let mut delete_handler = DeleteHandler::new(Rc::clone(&deps_ref));
+
     match cmd {
         Commands::Get { pattern } => {
-            match cmd_get::get_command(&pattern, deps) {
+            match get_handler.get_command(&pattern) {
                 Ok(_) => { log_info!("Completed successfully.") }
                 Err(err) => {
                     log_error!("Error: {}", err.to_string());
@@ -127,7 +123,7 @@ pub(crate) fn app(deps: &mut Deps) {
             }
         }
         Commands::Add { pattern, execute } => {
-            match cmd_add::add_command(pattern, execute, deps) {
+            match add_handler.add_command(pattern, execute) {
                 Ok(_) => { log_info!("Completed successfully.") }
                 Err(err) => {
                     log_error!("Error: {}", err.to_string());
@@ -135,14 +131,14 @@ pub(crate) fn app(deps: &mut Deps) {
             }
         }
         Commands::Clear {} => {
-            cmd_clear::clear(&deps);
+            clear_handler.clear();
         }
         Commands::Debug { pattern: _ } => {
-            let ctrl = &deps.controller;
+            let ctrl = &deps_ref.as_ref().borrow().controller;
             ctrl.debug();
         }
         Commands::Delete {} => {
-            match delete_command(deps) {
+            match delete_handler.delete_command() {
                 Ok(_) => { log_info!("Completed successfully.") }
                 Err(err) => {
                     log_error!("Error: {}", err.to_string());
